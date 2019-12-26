@@ -1,6 +1,10 @@
 #ifndef _LWLINK_H
 #define _LWLINK_H
 
+#ifdef __cplusplus 
+extern "C" {
+#endif
+
 #include "stdint.h"
 
 #define PACKED __attribute__((__packed__))
@@ -19,11 +23,11 @@
 #define MSG_TYPE_FOLLOW2     0x75
 #define MSG_TYPE_RAW_IMAGE   0x02
 
-#define MSG_HEAD1  0x48
-#define MSG_HEAD2  0x46
-#define MSG_END1   0x51
-#define MSG_END2   0x52
-#define MSG_LENGTH_MAX  640*480
+#define MSG_HEAD1  (0x01)
+#define MSG_HEAD2  (0xFE)
+#define MSG_END1   (0x02)
+#define MSG_END2   (0xFD)
+#define MSG_LENGTH_MAX  10240
 
 
 enum handler_status_e{
@@ -63,4 +67,9 @@ uint8_t  lwlink_data_handler_get_type(struct lwlink_data_handler_s *handler);
 uint8_t  lwlink_data_handler_get_id(struct lwlink_data_handler_s *handler);
 uint8_t  lwlink_data_handler_get_length(struct lwlink_data_handler_s *handler);
 uint8_t* lwlink_data_handler_get_data(struct lwlink_data_handler_s *handler);
+
+#ifdef __cplusplus 
+}
+#endif
+
 #endif

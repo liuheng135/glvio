@@ -19,10 +19,10 @@
 #define MSG_TYPE_FOLLOW2     0x75
 #define MSG_TYPE_RAW_IMAGE   0x02
 
-#define MSG_HEAD1  0x48
-#define MSG_HEAD2  0x46
-#define MSG_END1   0x51
-#define MSG_END2   0x52
+#define MSG_HEAD1  0x01
+#define MSG_HEAD2  0xFE
+#define MSG_END1   0x02
+#define MSG_END2   0xFD
 #define MSG_LENGTH_MAX  20480
 
 
@@ -54,6 +54,15 @@ struct lwlink_msg_s{
     uint8_t  *buf;
     uint8_t  *end1;
     uint8_t  *end2;
+};
+
+struct lwlink_feature2D_s{
+    uint8_t  image_id;
+    uint16_t feature_id;
+    float    pos_x;
+    float    pos_y;
+    float    vel_x;
+    float    vel_y;
 };
 
 int      lwlink_msg_pack(struct lwlink_data_handler_s *handler,uint8_t type,uint8_t *data,uint32_t len);

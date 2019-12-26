@@ -1,4 +1,5 @@
 #include "lwlink.h"
+#include "stdio.h"
 
 int lwlink_msg_pack(struct lwlink_data_handler_s *handler,uint8_t type,uint8_t *data,uint32_t len)
 {
@@ -30,9 +31,11 @@ int lwlink_msg_pack(struct lwlink_data_handler_s *handler,uint8_t type,uint8_t *
 
 int lwlink_data_handler_init(struct lwlink_data_handler_s *handler,uint8_t id)
 {
+    //printf("AAA\r\n");
     handler->status = HANDLER_STATUS_WHEAD1;
     handler->id = id;
     handler->rxbuf_ptr = 0;
+    //printf("BBB\r\n");
     return 0;
 }
 
@@ -60,20 +63,24 @@ int lwlink_data_handler_parse(struct lwlink_data_handler_s *handler,uint8_t ch)
                 handler->status  = HANDLER_STATUS_WHEAD2;
                 handler->rxbuf_ptr = 0;
                 handler->rxbuf[handler->rxbuf_ptr++] = ch;
+                printf("H1 OK\r\n");
             }
             break;
         case HANDLER_STATUS_WHEAD2:
             if(ch == MSG_HEAD2){
                 handler->status  = HANDLER_STATUS_DATA;
                 handler->rxbuf[handler->rxbuf_ptr++] = ch;
+                printf("H2 OK\r\n");
             }else{
                   handler->status  = HANDLER_STATUS_WHEAD1;
+                  printf("H1 F\r\n");
             }
             break;
         case HANDLER_STATUS_DATA:
             handler->rxbuf[handler->rxbuf_ptr++] = ch;    
             if(ch == MSG_END1){
                 handler->status = HANDLER_STATUS_WEND2;
+                printf("E1 OK:%d\r\n",handler->rxbuf_ptr-1);
             }
             break;
         case HANDLER_STATUS_WEND2:
@@ -82,23 +89,27 @@ int lwlink_data_handler_parse(struct lwlink_data_handler_s *handler,uint8_t ch)
                 if(handler->rxbuf[3] >= 0x20 ){
                     if(handler->rxbuf[handler->rxbuf_ptr - 3] == lwlink_data_checksum_calc(handler)){
                         handler->status  = HANDLER_STATUS_WHEAD1;
+                        printf(" P  E2 OK\r\n");
                         return 1;
                     }else{
                         handler->status  = HANDLER_STATUS_WHEAD1;
+                        printf(" P  E2 F\r\n");
                         return -2;
                     }
                 }else{
                     uint16_t length =(int16_t)((uint16_t)handler->rxbuf[4]|(uint16_t)handler->rxbuf[5]<<8);
                     if(length == (handler->rxbuf_ptr - 9)){
                         handler->status  = HANDLER_STATUS_WHEAD1;
+                        printf("E2 OK\r\n");
                         return 2;
                     }else{
                         handler->status  = HANDLER_STATUS_WHEAD1;
+                        printf("E2 CK F \r\n");
                         return -3;
                     }
                 }
             }else{
-                handler->status  = HANDLER_STATUS_WHEAD1;
+                handler->status  = HANDLER_STATUS_DATA;
             }
             break;
         default:

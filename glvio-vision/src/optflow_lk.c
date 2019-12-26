@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <float.h>
 
-void optflow_lk_create(struct optflow_lk *op,int max_layer,float max_vel,float lambda,struct size *win_size)
+void optflow_lk_create(struct optflow_lk *op,int max_layer,float max_vel,float lambda,struct size2i *win_size)
 {
     op->lambda     = lambda;
     op->max_layer  = max_layer;
@@ -36,7 +36,7 @@ void optflow_lk_set_lambda(struct optflow_lk *op,float lambda)
     op->lambda = lambda;
 }
 
-void optflow_lk_set_win_size(struct optflow_lk *op,struct size *win_size)
+void optflow_lk_set_win_size(struct optflow_lk *op,struct size2i *win_size)
 {
     matrix_destroy(&op->deriv_buffer);
 

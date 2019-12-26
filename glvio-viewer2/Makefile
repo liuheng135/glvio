@@ -1,30 +1,30 @@
-INC = -I. 
-SRC = $(wildcard ./*.c)
-OBJ = $(patsubst %.c,%.o,$(SRC))
+PROJECT_PATH = $(shell pwd)
 
-CUR_DIR=`pwd`
-CROSS_TOOL=
+INCLUDE := -I$(PROJECT_PATH)
+INCLUDE += -I/usr/local/Cellar 
+#INCLUDE += -I/usr/local/Cellar/eigen/3.3.7/include/eigen3
+#INCLUDE += -I/usr/local/Cellar/vtk/8.2.0_3/include/vtk-8.2
 
-BIN=./glvio-viewer
+LIB := -lopencv_video 
+LIB += -lopencv_features2d 
+LIB += -lopencv_core 
+LIB += -lopencv_highgui 
+LIB += -lopencv_imgproc 
+LIB += -lopencv_imgcodecs 
+LIB += -lopencv_videoio 
+LIB += -lopencv_calib3d
+LIB += -lopencv_viz
 
-CC = $(CROSS_TOOL)gcc
-STRIP = $(CROSS_TOOL)strip
-CFLAGS += -Os 
-CFLAGS += -pipe -Werror=format-security -fno-caller-saves -D_FORTIFY_SOURCE=1 -Wl,-z,now -Wl,-z,relro
-CFLAGS += -Wall
-# 注意库的引入顺序：被依赖的库放到后面！
-LIB += -lrt -lm
+#LIB += -lpcl_common
+#LIB += -lpcl_visualization
+#LIB += -lvtkCommonCore-8.2
+#LIB += -lpcl_io
+#LIB += -lpcl_io_ply
+#LIB += -lpcl_features
+#LIB += -lpcl_keypoints
 
-all : $(OBJ)
-	$(CC) $(CFLAGS) $(INC) $(OBJ) $(LIB) -o $(BIN)
-	@echo 
-	@echo "build flow successfully"
-	@echo 
-
-%.o : %.c
-	$(CC) $(CFLAGS) $(INC) -c $^ -o $@
+all:
+	g++ glvio-receiver.cpp lwlink.c udp.c  $(INCLUDE) $(LIB) -o glvio-viewer.o
 
 clean:
-	@rm -f *.o
-	@rm -f $(BIN)
-
+	rm *.o

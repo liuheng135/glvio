@@ -10,20 +10,33 @@
 #include "lwlink.h"
 #include "network.h"
 #include "image_lib.h"
+#include "optflow_lk.h"
 
 #define STACK_SIZE                      (64*1024)
 #define ARRAY_SIZE(arr)                 ( sizeof(arr) / sizeof((arr)[0]) )
 #define IS_IN_RANGE(var, min, max)      ( ((min) <= (var)) && ((var) <= (max)) )
 
+#define CAM0_IMAGE_WIDTH    640
+#define CAM0_IMAGE_HEIGHT   480
+
+
 pthread_t thid1;
 
 struct net_data_s net0;
 struct lwlink_data_handler_s link_handler;
+struct optflow_lk  optflow0;
+
+unsigned char image_buffer_a[100*100];
+unsigned char image_buffer_b[100*100];
+
+unsigned char *prev_img = NULL;
+unsigned char *next_img = NULL;
 
 static void *thread_flow(void *arg)
 {
 	int i,j;
     int ret = 0;
+    int counter = 0;
 	int msg_length = 0;
     uint8_t *image = NULL;
 	uint8_t *image_ptr = NULL;
@@ -31,40 +44,48 @@ static void *thread_flow(void *arg)
 	struct matrix_s raw_img;
 	struct matrix_s s_img;
 
-	struct point2i start = {.x = 270,.y = 190};
-	struct point2i size = {.x = 100,.y = 100};
+	struct point2i roi_start = {.x = 270,.y = 190};
+	struct size2i  roi_size = {.x = 100,.y = 100};
+    struct size2i  opt_win_size = {.x = 17,.y = 17}; 
 
-    ret = camera_init("/dev/video1", 640,480);
+    ret = camera_init("/dev/video1",CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT);
     if(ret < 0){
         exit(-1);
     }
+
+    prev_img = image_buffer_a;
+    next_img = image_buffer_b;
+
+    image = camera_get_image(); 
 
 	if(network_init(&net0,"192.168.0.21",3366) < 0){
 		printf("Failed to init network\r\n");
 	}
 
 	lwlink_data_handler_init(&link_handler,0x02);
-    matrix_create(&raw_img,640,480,1,IMAGE_TYPE_8U);
+    
 	matrix_create(&s_img,100,100,1,IMAGE_TYPE_8U);
+    optflow_lk_create(&optflow0,1,5.0f,0.5f,&opt_win_size);
 
     while(1) {
         //从摄像头获取一帧图像
         image = camera_get_image();  
 		image_ptr = image;
 
-		for(j = 0; j < raw_img.rows; j++){
-			for(i = 0; i < raw_img.cols; i++){
-				raw_img.data[j*raw_img.cols + i] =*image_ptr++;
-			}
-		}
+        counter++;
 
-		matrix_copy_aera(&raw_img,&s_img,&start,&size);
-		msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_RAW_IMAGE,s_img.data,100*100);		
-		if(network_read(&net0,recv_buffer,64) > 0){
-			printf("data received\r\n");
-		}
+        //optflow_lk_calc(&optflow0,);
 
-        printf("send a image:%d \r\n",network_write(&net0,link_handler.txbuf,msg_length));
+        if(counter % 2 == 0){
+            matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
+            matrix_copy_aera(&raw_img,&s_img,&roi_start,&roi_size);
+            msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_RAW_IMAGE,s_img.data,100*100);		
+            network_write(&net0,link_handler.txbuf,msg_length);
+        }
+
+        if(network_read(&net0,recv_buffer,64) > 0){
+			printf(" ");
+		}
     }
     camera_deinit();
     return NULL;

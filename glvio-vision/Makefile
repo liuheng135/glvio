@@ -3,7 +3,8 @@ SRC = $(wildcard src/*.c)
 OBJ = $(patsubst %.c,%.o,$(SRC))
 
 CUR_DIR=`pwd`
-CROSS_TOOL = ${CUR_DIR}/../out/sun8iw8p1/linux/common/buildroot/external-toolchain/bin/arm-buildroot-linux-musleabi-
+#CROSS_TOOL = ${CUR_DIR}/../out/sun8iw8p1/linux/common/buildroot/external-toolchain/bin/arm-buildroot-linux-musleabi-
+CROSS_TOOL = ~/share/glvio-sdk/out/sun8iw8p1/linux/common/buildroot/external-toolchain/bin/arm-buildroot-linux-musleabi-
 
 
 BIN=./glvio-vision
