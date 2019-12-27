@@ -48,6 +48,7 @@ int network_write(struct net_data_s *dat, const void *buffer, int size)
 		if(ret < 0){
 			perror("send failed");
 		}
+        return ret;
 	}else{
 		return 0;
 	}

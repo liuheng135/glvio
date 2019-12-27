@@ -15,8 +15,6 @@
 #include "camera.h"
 #include <stdbool.h>
 
-static struct camera_data camera_dev;
-
 //·â×°ºóµÄioctl()
 static void xioctl(int fh, int request, void *arg)
 {

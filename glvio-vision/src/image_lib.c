@@ -2,9 +2,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-
-void *pvPortMalloc( size_t xWantedSize );
 	
 void matrix_create(struct matrix_s *mat,int cols,int rows,int channel,int type)
 {
@@ -60,19 +57,19 @@ int make_deriv_kernel(struct matrix_s *kx,struct matrix_s *ky,int dx,int dy,int 
     }
 
     if(size != 3){
-        return -1;
+        return -2;
     }
 
     if(kx->data == NULL || ky->data == NULL){
-        return -1;
+        return -3;
     }
 
     if(dx < 0 || dx > 2){
-        return -1;
+        return -4;
     }
 
     if(dy < 0 || dy > 2){
-        return -1;
+        return -5;
     }
 
     for(i = 0;i < 3;i++){
@@ -85,6 +82,223 @@ int make_deriv_kernel(struct matrix_s *kx,struct matrix_s *ky,int dx,int dy,int 
     ky->rows = 1;
 
     return 0;
+}
+
+int matrix_binning(struct matrix_s *src,struct matrix_s *dst)
+{
+    int i,j;
+    int si,sj;
+    unsigned int tmp;
+
+    unsigned char  *src_data_8uc1;
+    int            *src_data_32sc1;
+    float          *src_data_32fc1;
+
+    unsigned char  *dst_data_8uc1;
+    int            *dst_data_32sc1;
+    float          *dst_data_32fc1;
+
+    if(src->type != dst->type){
+        return -1;
+    }
+
+    if(src->channel != 1 || src->channel != dst->channel){
+        return -2;
+    }
+
+
+    if(dst->cols * 2 != src->cols || dst->rows * 2 != src->rows){
+        return -3;
+    }
+
+    if(dst->data == NULL || src->data == NULL){
+        return -4;
+    }
+
+    if(dst->type == IMAGE_TYPE_8U){
+        src_data_8uc1 = src->data;
+        dst_data_8uc1 = dst->data;
+        for(j = 0; j < dst->rows; j++){
+            for(i = 0; i < dst->cols; i++){
+                si = i*2;
+                sj = j*2;
+                tmp = src_data_8uc1[sj * src->cols + si] + src_data_8uc1[sj * src->cols + si + 1] \
+                    + src_data_8uc1[(sj + 1) * src->cols + si] + src_data_8uc1[(sj + 1) * src->cols + si + 1];
+                dst_data_8uc1[j * dst->cols + i] = (unsigned char)(tmp >> 2);
+            }
+        }
+        return 0;
+    }
+
+    if(dst->type == IMAGE_TYPE_32S){
+        src_data_32sc1 = (int *)src->data;
+        dst_data_32sc1 = (int *)dst->data;
+        for(j = 0; j < dst->rows; j++){
+            for(i = 0; i < dst->cols; i++){
+                si = i*2;
+                sj = j*2;
+                tmp = src_data_32sc1[sj * src->cols + si] + src_data_32sc1[sj * src->cols + si + 1] \
+                    + src_data_32sc1[(sj + 1) * src->cols + si] + src_data_32sc1[(sj + 1) * src->cols + si + 1];
+                dst_data_32sc1[j * dst->cols + i] = tmp / 4;
+            }
+        }
+        return 0;
+    }
+
+    if(dst->type == IMAGE_TYPE_32F){
+        src_data_32fc1 = (float *)src->data;
+        dst_data_32fc1 = (float *)dst->data;
+        for(j = 0; j < dst->rows; j++){
+            for(i = 0; i < dst->cols; i++){
+                si = i*2;
+                sj = j*2;
+                tmp = src_data_32fc1[sj * src->cols + si] + src_data_32fc1[sj * src->cols + si + 1] \
+                    + src_data_32fc1[(sj + 1) * src->cols + si] + src_data_32fc1[(sj + 1) * src->cols + si + 1];
+                dst_data_32fc1[j * dst->cols + i] = tmp * 0.25f;
+            }
+        }
+        return 0;
+    }
+    return -5;
+}
+
+int   matrix_convert_type(struct matrix_s *src,struct matrix_s *dst)
+{
+    int i,j;
+
+    unsigned char  *src_data_8uc1;
+    int            *src_data_32sc1;
+    //unsigned int   *src_data_32uc1;
+    float          *src_data_32fc1;
+
+    unsigned char  *dst_data_8uc1;
+    int            *dst_data_32sc1;
+    unsigned int   *dst_data_32uc1;
+    float          *dst_data_32fc1;
+
+    if(src->cols != dst->cols || src->rows != dst->rows){
+        return -1;
+    }
+
+    if(src->channel != dst->channel){
+        return -2;
+    }
+
+    if(src->type == dst->type){
+        return 0;
+    }
+
+    if(src->channel != 1){
+        /* only support 1 channel for now  */
+        return -3;
+    }
+
+    
+    /* uint8_t to int32_t */
+    if((src->type == IMAGE_TYPE_8U) && (dst->type = IMAGE_TYPE_32S)){
+        src_data_8uc1 = (unsigned char*)src->data;
+        dst_data_32sc1 = (int*)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_32sc1++ = (int)*src_data_8uc1++;
+            }
+        }
+        return 0;
+    }
+
+    /* uint8_t to uint32_t */
+    if((src->type == IMAGE_TYPE_8U) && (dst->type = IMAGE_TYPE_32U)){
+        src_data_8uc1 = (unsigned char*)src->data;
+        dst_data_32uc1 = (unsigned int*)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_32uc1++ = (unsigned int)*src_data_8uc1++;
+            }
+        }
+        return 0;
+    }
+
+    /* uint8_t to float */
+    if((src->type == IMAGE_TYPE_8U) && (dst->type = IMAGE_TYPE_32F)){
+        src_data_8uc1 = (unsigned char*)src->data;
+        dst_data_32fc1 = (float*)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_32fc1++ = (float)*src_data_8uc1++;
+            }
+        }
+        return 0;
+    }
+
+    /* int32_t to uint8_t */
+    if((src->type == IMAGE_TYPE_32S) && (dst->type = IMAGE_TYPE_8U)){
+        src_data_32sc1 = (int *)src->data;
+        dst_data_8uc1 = (unsigned char*)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_8uc1++ = (unsigned char)(*src_data_32sc1++ & 0xff);
+            }
+        }
+        return 0;
+    }
+
+    /* int32_t to float */
+    if((src->type == IMAGE_TYPE_32S) && (dst->type = IMAGE_TYPE_32F)){
+        src_data_32sc1 = (int *)src->data;
+        dst_data_32fc1 = (float *)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_32fc1++ = (float)*src_data_32sc1++;
+            }
+        }
+        return 0;
+    }
+
+    /* int32_t to float */
+    if((src->type == IMAGE_TYPE_32S) && (dst->type = IMAGE_TYPE_32F)){
+        src_data_32sc1 = (int *)src->data;
+        dst_data_32fc1 = (float *)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_32fc1++ = (float)*src_data_32sc1++;
+            }
+        }
+        return 0;
+    }
+
+    /* float to  int32_t */
+    if((src->type == IMAGE_TYPE_32F) && (dst->type = IMAGE_TYPE_32S)){
+        src_data_32fc1 = (float *)src->data;
+        dst_data_32sc1 = (int *)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_32sc1++ = (int)*src_data_32fc1++;
+            }
+        }
+        return 0;
+    }
+
+    /* float to  uint8_t */
+    if((src->type == IMAGE_TYPE_32F) && (dst->type = IMAGE_TYPE_8U)){
+        src_data_32fc1 = (float *)src->data;
+        dst_data_8uc1 = (unsigned char*)dst->data;
+
+        for(j = 0; j <  src->rows; j++){
+            for(i = 0; i < src->cols; i++){
+                *dst_data_8uc1++ = (unsigned char)*src_data_32fc1++;
+            }
+        }
+        return 0;
+    }
+
+    return -5;
 }
 
 int matrix_copy_aera(struct matrix_s *src,struct matrix_s *dst,struct point2i *start,struct size2i *size)

@@ -11,6 +11,9 @@ struct udp_data_s udp0;
 struct lwlink_data_handler_s link_handler;
 char recvBuf[12000] = { 0 };
 
+#define FLOW_IMAGE_WIDTH    64
+#define FLOW_IMAGE_HEIGHT   64
+
 void martix2Mat(cv::Mat *dst,struct matrix_s *src)
 {
     int size = dst->cols * dst->rows;
@@ -21,10 +24,12 @@ int main(int argc, char *argv[])
 {
     int i;
     int recved_len;
+    unsigned char msg_type;
     char ip_addr[] = "192.168.0.1";
     char hello[] = "hello";
+    struct lwlink_feature2D_s fp1;
 
-    cv::Mat cv_img(100,100,CV_8UC1);
+    cv::Mat cv_img(FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,CV_8UC1);
     cv::namedWindow("image",1);
    
     printf("viewer start...\r\n");
@@ -40,28 +45,31 @@ int main(int argc, char *argv[])
         udp_send(&udp0,hello,5);
 
         if(recved_len > 0){
-            cout << "data recvd:" << recved_len << endl;
-            for(i = 0;i < 6;i++){
-                printf("0x%02x ",recvBuf[i]);
-            }
-            printf(" ... ");
-            for(i = recved_len - 3;i < recved_len;i++){
-                printf("0x%02x ",recvBuf[i]);
-            }
-            printf("\r\n");
-
 			for(i = 0; i < recved_len; i++){
                 if(lwlink_data_handler_parse(&link_handler,recvBuf[i]) > 0){
-                    uint8_t *img_data = lwlink_data_handler_get_data(&link_handler);
-                    memcpy(cv_img.data,img_data,100*100);
-                    cout << "msg recvd,type is " << lwlink_data_handler_get_type(&link_handler) << endl;
-                    cv::imshow("image",cv_img);
-                    
+                    uint8_t msg_type = lwlink_data_handler_get_type(&link_handler);
+
+                    if(msg_type == MSG_TYPE_FEATURE2D){
+                        uint8_t *img_data = lwlink_data_handler_get_data(&link_handler);
+                        struct lwlink_feature2D_s *tfp = (struct lwlink_feature2D_s *)img_data;
+                        memcpy(&fp1,tfp,sizeof(fp1));
+                        cout << "vel = " << fp1.vel_x << "," << fp1.vel_y  << ",   " << fp1.quality << endl;
+                    }
+
+                    if(msg_type == MSG_TYPE_RAW_IMAGE){
+                        uint8_t *img_data = lwlink_data_handler_get_data(&link_handler);
+                        memcpy(cv_img.data,img_data,FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT);
+
+                        cv::Point2f pstart(FLOW_IMAGE_WIDTH/2,FLOW_IMAGE_HEIGHT/2);
+                        cv::Point2f pvel(fp1.vel_x,fp1.vel_y);
+                        cv::Point2f pend = pstart + pvel * 2;
+                        cv::arrowedLine(cv_img,pstart,pend,cv::Scalar::all(-1),1,8,0,0.1);
+
+                        cv::imshow("image",cv_img);
+                    }
                 }     
             }
-            
         }
-        
         cv::waitKey(10); 
     }
 

@@ -95,7 +95,6 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
 	float delta_x,delta_y;
 	struct point2f new_point;
 	
-
     a = prev_point->x - (float)ppx;
     b = prev_point->y - (float)ppy;
 
@@ -112,13 +111,11 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
 
             src = (int *)prev_img->data;  
             src+= jj * prev_img->cols + ii;
-
             vi00 = src[0];
             vi01 = src[1];
             vi10 = src[prev_img->cols];
             vi11 = src[prev_img->cols + 1];
             Ibuf[0] = w00 * (float)vi00 + w01 * (float)vi01 + w10 * (float)vi10 + w11 * (float)vi11;
-
             vi00 = matrix_calc_pixel_deriv(prev_img,ii,jj,&op->kx10,&op->ky10);
             vi01 = matrix_calc_pixel_deriv(prev_img,ii,jj+1,&op->kx10,&op->ky10);
             vi10 = matrix_calc_pixel_deriv(prev_img,ii+1,jj,&op->kx10,&op->ky10);
@@ -164,12 +161,15 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
             Ibuf +=  op->deriv_buffer.channel;
         }
     }
-
     A11 = lambda1*iA11 + lambda2*A11;
     A12 = lambda1*iA12 + lambda2*A12;
     A22 = lambda1*iA22 + lambda2*A22;
 
     D = A11*A22 - A12*A12;
+
+    if(err){
+        *err = (A22 + A11 - sqrt((A11-A22)*(A11-A22) + 4.f*A12*A12))/(2* op->win_size.x * op->win_size.y);
+    }
     if( D < DBL_EPSILON )
     {
         next_point->x = prev_point->x;
@@ -239,8 +239,13 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
         
         delta_x = (A12*b2 - A22*b1) * D;
         delta_y = (A12*b1 - A11*b2) * D;
+
         new_point.x += delta_x;
         new_point.y += delta_y;
+
+        if((fabs(new_point.x - prev_point->x) > op->max_vel) ||  (fabs(new_point.y - prev_point->y) > op->max_vel)){
+            break;
+        }
 
         if((delta_x * delta_x + delta_y * delta_y) < 0.001f){
             break;

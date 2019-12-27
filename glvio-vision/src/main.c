@@ -19,73 +19,122 @@
 #define CAM0_IMAGE_WIDTH    640
 #define CAM0_IMAGE_HEIGHT   480
 
+#define FLOW_IMAGE_WIDTH    64
+#define FLOW_IMAGE_HEIGHT   64
+
+#define FLOW_USING_LWLINK
+
 
 pthread_t thid1;
 
+#ifdef FLOW_USING_LWLINK
 struct net_data_s net0;
 struct lwlink_data_handler_s link_handler;
+#endif
+
 struct optflow_lk  optflow0;
 
-unsigned char image_buffer_a[100*100];
-unsigned char image_buffer_b[100*100];
 
-unsigned char *prev_img = NULL;
-unsigned char *next_img = NULL;
+int image_buffer_a[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+int image_buffer_b[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+unsigned char image_buffer_c[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+unsigned char image_buffer_d[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT*4];
 
 static void *thread_flow(void *arg)
 {
-	int i,j;
     int ret = 0;
     int counter = 0;
 	int msg_length = 0;
     uint8_t *image = NULL;
-	uint8_t *image_ptr = NULL;
-	char *recv_buffer[128];
+    uint8_t *swap_ptr = NULL;
+	
 	struct matrix_s raw_img;
-	struct matrix_s s_img;
+    struct matrix_s bin_img;
+	struct matrix_s roi_img;
+    struct matrix_s prev_img;
+    struct matrix_s next_img;
 
-	struct point2i roi_start = {.x = 270,.y = 190};
-	struct size2i  roi_size = {.x = 100,.y = 100};
+	struct point2i bin_start = {
+            .x = CAM0_IMAGE_WIDTH /2 - FLOW_IMAGE_WIDTH,
+            .y = CAM0_IMAGE_HEIGHT / 2 - FLOW_IMAGE_HEIGHT,};
+
+	struct size2i  bin_size = {.x = FLOW_IMAGE_WIDTH * 2, .y = FLOW_IMAGE_HEIGHT * 2};
     struct size2i  opt_win_size = {.x = 17,.y = 17}; 
+
+    struct point2f prev_point = {.x = FLOW_IMAGE_WIDTH / 2, .y = FLOW_IMAGE_HEIGHT / 2};
+    struct point2f next_point = {.x = 0, .y = 0};
+    float  flow_err;
 
     ret = camera_init("/dev/video1",CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT);
     if(ret < 0){
         exit(-1);
     }
 
-    prev_img = image_buffer_a;
-    next_img = image_buffer_b;
-
     image = camera_get_image(); 
+    matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
+    matrix_init(&bin_img,FLOW_IMAGE_WIDTH * 2,FLOW_IMAGE_HEIGHT * 2,1,IMAGE_TYPE_8U,image_buffer_d);
+    matrix_init(&prev_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_32S,(unsigned char *)image_buffer_a);
+    matrix_init(&next_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_32S,(unsigned char *)image_buffer_b);
+    matrix_init(&roi_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,(unsigned char *)image_buffer_c);
 
-	if(network_init(&net0,"192.168.0.21",3366) < 0){
+    matrix_copy_aera(&raw_img,&bin_img,&bin_start,&bin_size);
+    matrix_binning(&bin_img,&roi_img);
+    if(matrix_convert_type(&roi_img,&prev_img) != 0 ){
+        printf("unsupport image type\r\n");
+    }
+
+#ifdef FLOW_USING_LWLINK
+    if(network_init(&net0,"192.168.0.20",3366) < 0){
 		printf("Failed to init network\r\n");
 	}
-
 	lwlink_data_handler_init(&link_handler,0x02);
-    
-	matrix_create(&s_img,100,100,1,IMAGE_TYPE_8U);
+#endif
+
     optflow_lk_create(&optflow0,1,5.0f,0.5f,&opt_win_size);
 
     while(1) {
         //从摄像头获取一帧图像
         image = camera_get_image();  
-		image_ptr = image;
+		matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
+        matrix_copy_aera(&raw_img,&bin_img,&bin_start,&bin_size); 
+        matrix_binning(&bin_img,&roi_img);
+        if(matrix_convert_type(&roi_img,&next_img) != 0 ){
+            printf("unsupport image type\r\n");
+            continue;
+        }
+        optflow_lk_calc(&optflow0,&prev_img,&next_img,&prev_point,&next_point,&flow_err);
+        swap_ptr = next_img.data;
+        next_img.data = prev_img.data;
+        prev_img.data = swap_ptr;
 
         counter++;
 
-        //optflow_lk_calc(&optflow0,);
+#ifdef FLOW_USING_LWLINK
+        if(counter % 3 == 0){
+            char *recv_buffer[128];
+            struct lwlink_feature2D_s fp1;
 
-        if(counter % 2 == 0){
-            matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
-            matrix_copy_aera(&raw_img,&s_img,&roi_start,&roi_size);
-            msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_RAW_IMAGE,s_img.data,100*100);		
-            network_write(&net0,link_handler.txbuf,msg_length);
+            network_read(&net0,recv_buffer,32);
+            msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_RAW_IMAGE,roi_img.data,roi_img.cols * roi_img.rows);		
+            msg_length = network_write(&net0,link_handler.txbuf,msg_length);
+            
+            fp1.feature_id = 0;
+            fp1.image_id   = 0;
+            fp1.pos_x      = FLOW_IMAGE_WIDTH / 2;
+            fp1.pos_y      = FLOW_IMAGE_HEIGHT / 2;
+            fp1.vel_x      = next_point.x - prev_point.x;
+            fp1.vel_y      = next_point.y - prev_point.y;
+            fp1.quality    = flow_err;
+            msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_FEATURE2D,&fp1,sizeof(fp1));
+            msg_length = network_write(&net0,link_handler.txbuf,msg_length); 
         }
+#endif
 
-        if(network_read(&net0,recv_buffer,64) > 0){
-			printf(" ");
-		}
+#ifdef FLOW_USING_MSGQUE
+
+
+#endif
+
     }
     camera_deinit();
     return NULL;
