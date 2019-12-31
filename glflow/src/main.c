@@ -11,6 +11,8 @@
 #include "network.h"
 #include "image_lib.h"
 #include "optflow_lk.h"
+#include "msgque.h"
+
 
 #define STACK_SIZE                      (64*1024)
 #define ARRAY_SIZE(arr)                 ( sizeof(arr) / sizeof((arr)[0]) )
@@ -22,8 +24,8 @@
 #define FLOW_IMAGE_WIDTH    32
 #define FLOW_IMAGE_HEIGHT   32
 
-#define FLOW_USING_LWLINK
-
+//#define FLOW_USING_LWLINK
+#define FLOW_USING_MSGQUE
 
 pthread_t thid1;
 
@@ -119,6 +121,10 @@ static void *thread_flow(void *arg)
 	lwlink_data_handler_init(&link_handler,0x02);
 #endif
 
+#ifdef FLOW_USING_MSGQUE
+    msgque_init();
+#endif
+
     optflow_lk_create(&optflow0,1,5.0f,0.5f,&opt_win_size);
 
     last = get_time_now();
@@ -176,8 +182,23 @@ static void *thread_flow(void *arg)
 #endif
 
 #ifdef FLOW_USING_MSGQUE
+        struct msgque_flow_info_s msg_info;
 
+        if(flow_err < 1){
+            flow_err = 0;
+        }
+        if(flow_err > 250.f){
+            flow_err = 250.f;
+        }
+        msg_info.msg_type = 10;
+        msg_info.vx = (next_point.x - prev_point.x) / dt;
+        msg_info.vy = (next_point.y - prev_point.y) / dt;
+        msg_info.version = 300;
+        msg_info.time_loop = dt * 1000.f;
+        msg_info.confidence = (uint8_t)flow_err;
+        msgque_send(&msg_info);
 
+        //printf("flow = % 8.2f,% 8.2f % 7.2f % 8.2f\r\n",msg_info.vx,msg_info.vy,msg_info.time_loop,flow_err);
 #endif
 
     }
