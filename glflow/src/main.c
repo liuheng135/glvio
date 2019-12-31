@@ -19,8 +19,8 @@
 #define CAM0_IMAGE_WIDTH    640
 #define CAM0_IMAGE_HEIGHT   480
 
-#define FLOW_IMAGE_WIDTH    60
-#define FLOW_IMAGE_HEIGHT   60
+#define FLOW_IMAGE_WIDTH    32
+#define FLOW_IMAGE_HEIGHT   32
 
 #define FLOW_USING_LWLINK
 
@@ -81,11 +81,11 @@ static void *thread_flow(void *arg)
             .y = (CAM0_IMAGE_HEIGHT - FLOW_IMAGE_HEIGHT * 8)  /2,};
 
 	struct size2i  roi_size = {.x = FLOW_IMAGE_WIDTH * 8, .y = FLOW_IMAGE_HEIGHT * 8};
-    struct size2i  opt_win_size = {.x = 19,.y = 19}; 
+    struct size2i  opt_win_size = {.x = 17,.y = 17}; 
 
-    struct point2f prev_point[4];
-    struct point2f next_point[4];
-    float  flow_err[4];
+    struct point2f prev_point;
+    struct point2f next_point;
+    float          flow_err;
 
     ret = camera_init("/dev/video1",CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT);
     if(ret < 0){
@@ -139,18 +139,10 @@ static void *thread_flow(void *arg)
             continue;
         }
 
-        prev_point[0].x = FLOW_IMAGE_WIDTH  / 4 * 1;
-        prev_point[0].y = FLOW_IMAGE_HEIGHT / 4 * 1;
-        prev_point[1].x = FLOW_IMAGE_WIDTH  / 4 * 1;
-        prev_point[1].y = FLOW_IMAGE_HEIGHT / 4 * 3;
-        prev_point[2].x = FLOW_IMAGE_WIDTH  / 4 * 3;
-        prev_point[2].y = FLOW_IMAGE_HEIGHT / 4 * 1;
-        prev_point[3].x = FLOW_IMAGE_WIDTH  / 4 * 3;
-        prev_point[3].y = FLOW_IMAGE_HEIGHT / 4 * 3;
+        prev_point.x = FLOW_IMAGE_WIDTH  / 2;
+        prev_point.y = FLOW_IMAGE_HEIGHT / 2;
 
-        for(i = 0; i < 4; i++){
-            optflow_lk_calc(&optflow0,&prev_img,&next_img,&prev_point[i],&next_point[i],&flow_err[i]);
-        }
+        optflow_lk_calc(&optflow0,&prev_img,&next_img,&prev_point,&next_point,&flow_err);
         swap_ptr = next_img.data;
         next_img.data = prev_img.data;
         prev_img.data = swap_ptr;
@@ -163,24 +155,23 @@ static void *thread_flow(void *arg)
 #ifdef FLOW_USING_LWLINK
         if(counter % 3 == 0){
             char *recv_buffer[128];
-            struct lwlink_feature2D_s fp[4];
+            struct lwlink_feature2D_s fp;
 
             network_read(&net0,recv_buffer,32);
             msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_RAW_IMAGE,bin3_img.data,bin3_img.cols * bin3_img.rows);		
             msg_length = network_write(&net0,link_handler.txbuf,msg_length);
             
-            for(i = 0; i < 4; i++){
-                fp[i].feature_id = i;
-                fp[i].image_id   = 0;
-                fp[i].pos_x      = prev_point[i].x;
-                fp[i].pos_y      = prev_point[i].y;
-                fp[i].vel_x      = next_point[i].x - prev_point[i].x;
-                fp[i].vel_y      = next_point[i].y - prev_point[i].y;
-                fp[i].quality    = flow_err[i];
-                msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_FEATURE2D,&fp[i],sizeof(struct lwlink_feature2D_s));
-                msg_length = network_write(&net0,link_handler.txbuf,msg_length);
-            } 
-            printf("calc time = %f \r\n",calc_time * 1000.f);
+            fp.feature_id = 0;
+            fp.image_id   = 0;
+            fp.pos_x      = prev_point.x;
+            fp.pos_y      = prev_point.y;
+            fp.vel_x      = next_point.x - prev_point.x;
+            fp.vel_y      = next_point.y - prev_point.y;
+            fp.quality    = flow_err;
+            msg_length = lwlink_msg_pack(&link_handler,MSG_TYPE_FEATURE2D,&fp,sizeof(struct lwlink_feature2D_s));
+            msg_length = network_write(&net0,link_handler.txbuf,msg_length);
+            //printf("calc time = %f \r\n",calc_time * 1000.f);
+            printf("flow = % 8.2f % 8.2f %  6.2f % 6.2f \r\n", fp.vel_x / dt,fp.vel_y / dt,calc_time * 1000.f,flow_err);
         }
 #endif
 

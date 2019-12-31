@@ -11,8 +11,8 @@ struct udp_data_s udp0;
 struct lwlink_data_handler_s link_handler;
 char recvBuf[12000] = { 0 };
 
-#define FLOW_IMAGE_WIDTH    64
-#define FLOW_IMAGE_HEIGHT   64
+#define FLOW_IMAGE_WIDTH    60
+#define FLOW_IMAGE_HEIGHT   60
 
 void martix2Mat(cv::Mat *dst,struct matrix_s *src)
 {
@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
     unsigned char msg_type;
     char ip_addr[] = "192.168.0.1";
     char hello[] = "hello";
-    struct lwlink_feature2D_s fp1;
+    struct lwlink_feature2D_s fp[4];
 
     cv::Mat cv_img(FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,CV_8UC1);
     cv::namedWindow("image",1);
@@ -52,19 +52,20 @@ int main(int argc, char *argv[])
                     if(msg_type == MSG_TYPE_FEATURE2D){
                         uint8_t *img_data = lwlink_data_handler_get_data(&link_handler);
                         struct lwlink_feature2D_s *tfp = (struct lwlink_feature2D_s *)img_data;
-                        memcpy(&fp1,tfp,sizeof(fp1));
-                        cout << "vel = " << fp1.vel_x << "," << fp1.vel_y  << ",   " << fp1.quality << endl;
+                        if(tfp->feature_id < 4 ){
+                            memcpy(&fp[tfp->feature_id],tfp,sizeof(struct lwlink_feature2D_s));
+                        }
                     }
 
                     if(msg_type == MSG_TYPE_RAW_IMAGE){
                         uint8_t *img_data = lwlink_data_handler_get_data(&link_handler);
                         memcpy(cv_img.data,img_data,FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT);
 
-                        cv::Point2f pstart(FLOW_IMAGE_WIDTH/2,FLOW_IMAGE_HEIGHT/2);
-                        cv::Point2f pvel(fp1.vel_x,fp1.vel_y);
-                        cv::Point2f pend = pstart + pvel * 2;
-                        cv::arrowedLine(cv_img,pstart,pend,cv::Scalar::all(-1),1,8,0,0.1);
-
+                        for(i = 0; i < 4;i++){
+                            cv::Point2f pstart(fp[i].pos_x,fp[i].pos_y);
+                            cv::Point2f pend(fp[i].pos_x + fp[i].vel_x,fp[i].pos_y + fp[i].vel_y);
+                            cv::arrowedLine(cv_img,pstart,pend,cv::Scalar::all(-1),1,8,0,0.1);
+                        }
                         cv::imshow("image",cv_img);
                     }
                 }     
