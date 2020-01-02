@@ -15,7 +15,6 @@
 #include "camera.h"
 #include <stdbool.h>
 
-//·â×°ºóµÄioctl()
 static void xioctl(int fh, int request, void *arg)
 {
     int r;

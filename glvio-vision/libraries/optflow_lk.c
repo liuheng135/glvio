@@ -1,4 +1,5 @@
 #include "optflow_lk.h"
+#include "math.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
