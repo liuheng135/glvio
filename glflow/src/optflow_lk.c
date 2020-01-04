@@ -94,6 +94,8 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
 	float *Ibuf;
 	float delta_x,delta_y;
 	struct point2f new_point;
+
+    int if_break = 0;
 	
     a = prev_point->x - (float)ppx;
     b = prev_point->y - (float)ppy;
@@ -181,6 +183,8 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
     new_point.x = prev_point->x;
     new_point.y = prev_point->y;
     
+    if_break = 0;
+
     for(k = 0;k < 10;k++){
         b1 = 0.0;
         b2 = 0.0;
@@ -243,11 +247,27 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
         new_point.x += delta_x;
         new_point.y += delta_y;
 
-        if((fabs(new_point.x - prev_point->x) > op->max_vel) ||  (fabs(new_point.y - prev_point->y) > op->max_vel)){
-            break;
+        if((new_point.x - prev_point->x) > op->max_vel){
+            new_point.x = prev_point->x + op->max_vel;
+            if_break = 1;
+        }else if((new_point.x - prev_point->x) < -op->max_vel){
+            new_point.x = prev_point->x - op->max_vel;
+            if_break = 1;
+        }
+
+        if((new_point.y - prev_point->y) > op->max_vel){
+            new_point.y = prev_point->y + op->max_vel;
+             if_break = 1;
+        }else if((new_point.y - prev_point->y) < -op->max_vel){
+            new_point.y = prev_point->y - op->max_vel;
+             if_break = 1;
         }
 
         if((delta_x * delta_x + delta_y * delta_y) < 0.001f){
+             if_break = 1;
+        }
+
+        if( if_break != 0){
             break;
         }
     }
