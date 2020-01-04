@@ -1,0 +1,2 @@
+export PILOT_BOARD=lt1s
+export PILOT_PLATFORM=linux

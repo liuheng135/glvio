@@ -66,7 +66,7 @@ int network_write(struct hal_dev_s *dev, const void *buffer, int size,int pos)
 #define AW_UDP_PORT            9696
 #define AW_UDP_IP              "192.168.100.1"
 
-#define LW_UDP_PORT            50000
+#define LW_UDP_PORT            3366
 
 
 struct net_data_s net0_data;
@@ -99,7 +99,7 @@ int net_register(void)
 
 	net1_data.port = LW_UDP_PORT;
 
-	hal_dev_register(&net0_dev,"net0",HAL_O_RDWR);
+	//hal_dev_register(&net0_dev,"net0",HAL_O_RDWR);
 	hal_dev_register(&net1_dev,"net1",HAL_O_RDWR);
 	return 0;
 }

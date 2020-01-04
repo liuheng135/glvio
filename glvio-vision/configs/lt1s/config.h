@@ -8,7 +8,7 @@
 #define GPS_UART_PATH      "/dev/ttyS2"
 #define GPS_USING_UBLOX
 
-#define LOG_PATH_ROOT	   "/mnt/"
+#define LOG_PATH_ROOT	   "/tmp/"
 #define LOG_COUNT_MAX	    1
 #define LOG_BUF_SIZE       (10 * 1024)
 
@@ -17,7 +17,7 @@
 #define USING_FLOW           1
 #define FLOW_AGR_VERSION     1
 #define FLOW_CAMERA_NAME     "ov7740"
-#define FLOW_DELAY           (0.1f)   //  50fps ,  iir filter 10 20 400  ov7740
+#define FLOW_DELAY           (0.03f)   //  50fps ,  iir filter 10 20 400  ov7740
 #define FLOW_SPEED_SCALE     (0.0035f)  //  vga  ov7740
 #define FLOW_SHIFT_Z         (0.05)    //  meters
 #define FLOW_RORATE_ANGLE     315.0f   //  degrees

@@ -10,6 +10,7 @@ extern "C" {
 #define PACKED __attribute__((__packed__))
 
 #define MSG_TYPE_RAW_IMAGE   0x02
+#define MSG_TYPE_ATTITUDE    0x22
 #define MSG_TYPE_FEATURE2D   0x25
 
 #define MSG_HEAD1  0x01
@@ -57,6 +58,16 @@ struct lwlink_feature2D_s{
     float    vel_x;
     float    vel_y;
     float    quality;
+};
+
+struct lwlink_attitude_s{
+    uint8_t  component_id;
+    float    roll;
+    float    pitch;
+    float    yaw;
+    float    roll_speed;
+    float    pitch_speed;
+    float    yaw_speed;
 };
 
 int      lwlink_msg_pack(struct lwlink_data_handler_s *handler,uint8_t type,uint8_t *data,uint32_t len);

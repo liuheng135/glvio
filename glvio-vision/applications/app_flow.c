@@ -12,7 +12,7 @@
 #include "image_lib.h"
 #include "optflow_lk.h"
 
-pthread_mutex_t mp_mutex;
+pthread_mutex_t mp_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct flow_matched_point_s flow_mp[4];
 
@@ -29,8 +29,6 @@ int flow_copy_matched_points(struct flow_matched_point_s *mps)
     }   
     return 0;
 }
-
-
 
 
 struct optflow_lk  optflow0;
@@ -145,10 +143,10 @@ void *thread_flow(void *arg)
 
         pthread_mutex_lock(&mp_mutex);
         for(i = 0; i < 4; i++){
-            flow_mp[i].start_x = prev_point[i].x;
-            flow_mp[i].start_y = prev_point[i].y;
-            flow_mp[i].end_x = next_point[i].x;
-            flow_mp[i].end_y = next_point[i].y;
+            flow_mp[i].start_x = (prev_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.0035f;
+            flow_mp[i].start_y = (prev_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.0035f;
+            flow_mp[i].end_x = (next_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.0035f;
+            flow_mp[i].end_y = (next_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.0035f;
             flow_mp[i].quality = flow_err[i];
             flow_mp[i].timestamp += dt;
         }

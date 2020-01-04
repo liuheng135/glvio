@@ -24,7 +24,7 @@ LIB += -lopencv_viz
 #LIB += -lpcl_keypoints
 
 all:
-	g++ glvio-receiver.cpp lwlink.c udp.c  $(INCLUDE) $(LIB) -o glvio-viewer.o
+	g++ glvio-receiver.cpp lwlink.c udp.c quaternion.c  $(INCLUDE) $(LIB) -o glvio-viewer.o
 
 clean:
 	rm *.o

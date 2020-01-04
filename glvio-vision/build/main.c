@@ -19,6 +19,9 @@
 #include "app_debug.h"
 #include "app_timer.h"
 #include "app_events.h"
+#include "app_vio.h"
+#include "app_gllink.h"
+#include "app_log.h"
 
 #define MAIN_LOOP_TIME	(1.0f/MAIN_LOOP_HZ)
 #define MAX_SAFE_STACK  512 * 1024  
@@ -97,14 +100,15 @@ int thread_vio(void* paramter)
 	float dt,run_time_dt;
 
 	board_initialize();
-
 	param_init();
     timer_init();
     app_events_init();
 	imu_init();
 	calibrator_init();
+    lwlink_init();
+    vio_init();
+    log_init();
 	param_load();
-	
 	get_diff_time(&prev,true);
 	usleep(2000);
 	
@@ -118,7 +122,10 @@ int thread_vio(void* paramter)
 		    app_events_update(dt);
 			imu_update(dt);
 			calibrator_update(dt);
+            vio_update(dt);
+            lwlink_update(dt);
             param_update(dt);
+            log_update(dt);
 		}else{
 			printf("over skip:%3.3f\n",dt);
 		}
@@ -167,11 +174,11 @@ void signal_handler(int sig_no)
 
 void signal_handler_init(void)
 {
-        signal(SIGINT,signal_handler);
-        signal(SIGABRT,signal_handler);
-        signal(SIGSEGV,signal_handler);
-        signal(SIGSTOP,signal_handler);
-        signal(SIGXCPU,signal_handler);
+    signal(SIGINT,signal_handler);
+    signal(SIGABRT,signal_handler);
+    signal(SIGSEGV,signal_handler);
+    signal(SIGSTOP,signal_handler);
+    signal(SIGXCPU,signal_handler);
 }
 
 
@@ -190,7 +197,7 @@ int main(int argc, char *argv[])
 	signal_handler_init();
 
     platform_create_thread("vio",98,1024 * 256,thread_vio,&thread_vio_id);
-    platform_create_thread("flow",98,1024 * 256,thread_vio,&thread_flow_id);
+    platform_create_thread("flow",5,1024 * 1024,thread_flow,&thread_flow_id);
 
     pthread_join(thread_flow_id,NULL);
     pthread_join(thread_vio_id,NULL);
