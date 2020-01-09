@@ -73,6 +73,45 @@ int main(int argc, char *argv[])
                             cv::arrowedLine(cv_img,pstart,pend,cv::Scalar::all(-1),1,8,0,0.1);
                         }
                         cv::imshow("image",cv_img);
+                        cout << "image recved" << endl;
+                    }
+
+                    if(msg_type == MSG_TYPE_FEATURE3D){
+                        uint8_t *img_data = lwlink_data_handler_get_data(&link_handler);
+                        struct lwlink_feature3D_s *fp3d = (struct lwlink_feature3D_s *)img_data;
+
+                        if(fp3d->feature_id < 4){
+                            cv::Point3d cs(fp3d->pos_x,fp3d->pos_y,fp3d->pos_z);
+                            cs *= 20;
+                            cv::viz::WSphere point_start(cs,0.02,10,cv::viz::Color::white());
+                            cv::Point3d ce(fp3d->pos_x + fp3d->vel_x,fp3d->pos_y + fp3d->vel_y,fp3d->pos_z + fp3d->vel_z);
+                            ce *= 20;
+                            cv::viz::WSphere point_end(ce,0.02,10,cv::viz::Color::red());
+                            stringstream fnumber;
+                            fnumber << fp3d->feature_id;
+
+                            my3DWindow.showWidget("ps" + fnumber.str(), point_start);
+                            my3DWindow.showWidget("pe" + fnumber.str(), point_end);
+                        }else{
+                            cv::Point3d cr(fp3d->pos_x,fp3d->pos_y,fp3d->pos_z);
+                            cr *= 20;
+                            cv::viz::WSphere point_rotate(cr,0.02,10,cv::viz::Color::blue());
+                            stringstream fnumber;
+                            fnumber << fp3d->feature_id;
+
+                            my3DWindow.showWidget("pr" + fnumber.str(), point_rotate);
+                        }
+                    }
+
+                    if(msg_type == MSG_TYPE_LOCAL_POS){
+                        uint8_t *pos_data = lwlink_data_handler_get_data(&link_handler);
+                        struct lwlink_local_position_s *pos = (struct lwlink_local_position_s *)pos_data;
+                        cv::Point3d ls(0,0,0);
+                        cv::Point3d le(pos->vel_x,pos->vel_y,pos->vel_z);
+
+                        cv::viz::WLine vel(ls,le * 5,cv::viz::Color::silver());
+                        cout << "vel = " << pos->vel_x << " , " << pos->vel_y << " , " << pos->vel_z << endl; 
+                        my3DWindow.showWidget("vel",vel);
                     }
 
                     if(msg_type == MSG_TYPE_ATTITUDE){
@@ -98,12 +137,11 @@ int main(int argc, char *argv[])
                         my3DWindow.showWidget("CPW", cpw, cam_pose);
                         my3DWindow.showWidget("CPW_FRUSTUM", cpw_frustum, cam_pose);
                         my3DWindow.spinOnce(1,false);
-                        cout << "attitude recved" << endl;
                     }
                 }     
             }
         }
-        cv::waitKey(10); 
+        cv::waitKey(1); 
     }
 
     return 0;

@@ -110,16 +110,16 @@ void log_vio(bool armed)
 	vio_get_data(&vio_data);
     quater_to_eulur(&er,&vio_data.rotation);
 	
-	pkt.mp1_vel_x      = vio_data.mp1_vel[0];
-	pkt.mp1_vel_y      = vio_data.mp1_vel[1];
-	pkt.mp2_vel_x      = vio_data.mp2_vel[0];
-	pkt.mp2_vel_y      = vio_data.mp2_vel[1];
+	pkt.mp1_vel_x      = 0;
+	pkt.mp1_vel_y      = 0;
+	pkt.mp2_vel_x      = 0;
+	pkt.mp2_vel_y      = 0;
 	pkt.rotation_roll  = er.roll;
 	pkt.rotation_pitch = er.pitch;
 	pkt.rotation_yaw   = er.yaw;
-	pkt.translation_x  = vio_data.translation[0];
-	pkt.translation_y  = vio_data.translation[1];
-	pkt.translation_z  = vio_data.translation[2];
+	pkt.translation_x  = vio_data.translation.x;
+	pkt.translation_y  = vio_data.translation.y;
+	pkt.translation_z  = vio_data.translation.z;
 
 	if(armed){
 		log_recoder_write(&log_recoder,(char *)&pkt,sizeof(pkt));

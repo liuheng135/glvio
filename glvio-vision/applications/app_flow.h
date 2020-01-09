@@ -8,8 +8,7 @@
 #define FLOW_IMAGE_HEIGHT   60
 
 
-#define FLOW_STACK_SIZE                      (64*1024)
-
+#define FLOW_STACK_SIZE     (64*1024)
 
 struct flow_matched_point_s{
     float start_x;
@@ -21,6 +20,7 @@ struct flow_matched_point_s{
 };
 
 int flow_copy_matched_points(struct flow_matched_point_s *mps);
+int flow_copy_image(unsigned char *img,float *timestamp);
 void *thread_flow(void *arg);
 
 #endif

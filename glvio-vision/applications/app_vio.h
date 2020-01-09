@@ -3,9 +3,9 @@
 
 #include "rotation.h"
 #include "quaternion.h"
+#include "image_lib.h"
 
-#define VIO_IMU_ROTATE ROTATION_NONE
-
+#define CAMERA_FOCUS  0.003f
 
 struct vio_imu_s {
     float gyro[3];
@@ -17,9 +17,14 @@ struct vio_imu_s {
 struct vio_data_s {
     struct quaternion_s att;
     struct quaternion_s rotation;
-    float  translation[3];
-    float  mp1_vel[2];
-    float  mp2_vel[2];
+    struct point3f translation;
+    struct point3f velocity;
+    struct point3f accle;
+    struct point3f velocity_last;
+    float  translation_scale;
+
+    struct point3f point_start[4];
+    struct point3f point_end[4];
 };
 
 void vio_get_data(struct vio_data_s *dat);

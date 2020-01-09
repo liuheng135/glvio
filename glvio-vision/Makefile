@@ -31,7 +31,7 @@ SUB_DIRS := $(filter-out $(EXCLUDE_DIRS),$(SUB_DIRS))
 INC        := $(addprefix $(PROJECT_DIR),$(SUB_DIRS))
 export INC          := $(addprefix -I,$(INC))
 export OBJECTS_PATH := $(PROJECT_DIR)/$(OBJS_DIR)
-export CFLAGS       :=  -Wall -Werror -Os -lrt -lpthread -fno-strict-aliasing -ldl -lstdc++ -lm
+export CFLAGS       :=  -Wall -Werror -Os -lrt -lpthread -fno-strict-aliasing -ldl -lstdc++ -lm -mfloat-abi=softfp -mfpu=neon
 
 
 VER := 243

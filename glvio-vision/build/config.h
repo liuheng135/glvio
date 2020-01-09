@@ -24,8 +24,7 @@
 
 #define RF_LOST_TIME        2.5f            // seconds
 
-#define IMU_ROTATION	    ROTATION_PITCH_180
-#define MAG_ROTATION        ROTATION_ROLL_180_YAW_90
+#define IMU_ROTATION	    ROTATION_PITCH_180_YAW_90
 
 #define LOG_ENABLE       1
 #define LINK_PROTOCOL    1   /*  1 means awlink, 2 means lwlink, 3 means mavlink */

@@ -107,7 +107,7 @@ int thread_vio(void* paramter)
 	calibrator_init();
     lwlink_init();
     vio_init();
-    log_init();
+    //log_init();
 	param_load();
 	get_diff_time(&prev,true);
 	usleep(2000);
@@ -125,7 +125,7 @@ int thread_vio(void* paramter)
             vio_update(dt);
             lwlink_update(dt);
             param_update(dt);
-            log_update(dt);
+            //log_update(dt);
 		}else{
 			printf("over skip:%3.3f\n",dt);
 		}

@@ -11,7 +11,9 @@ extern "C" {
 
 #define MSG_TYPE_RAW_IMAGE   0x02
 #define MSG_TYPE_ATTITUDE    0x22
+#define MSG_TYPE_LOCAL_POS   0x23
 #define MSG_TYPE_FEATURE2D   0x25
+#define MSG_TYPE_FEATURE3D   0x26
 
 #define MSG_HEAD1  0x01
 #define MSG_HEAD2  0xFE
@@ -60,6 +62,18 @@ struct lwlink_feature2D_s{
     float    quality;
 };
 
+struct lwlink_feature3D_s{
+    uint8_t  image_id;
+    uint16_t feature_id;
+    float    pos_x;
+    float    pos_y;
+    float    pos_z;
+    float    vel_x;
+    float    vel_y;
+    float    vel_z;
+    float    quality;
+};
+
 struct lwlink_attitude_s{
     uint8_t  component_id;
     float    roll;
@@ -69,6 +83,19 @@ struct lwlink_attitude_s{
     float    pitch_speed;
     float    yaw_speed;
 };
+
+struct lwlink_local_position_s{
+    float    pos_x;
+    float    pos_y;
+    float    pos_z;
+    float    vel_x;
+    float    vel_y;
+    float    vel_z;
+    float    acc_x;
+    float    acc_y;
+    float    acc_z;
+};
+
 
 int      lwlink_msg_pack(struct lwlink_data_handler_s *handler,uint8_t type,uint8_t *data,uint32_t len);
 int      lwlink_data_handler_init(struct lwlink_data_handler_s *handler,uint8_t id);

@@ -15,7 +15,8 @@
 pthread_mutex_t mp_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct flow_matched_point_s flow_mp[4];
-
+unsigned char image_buffer[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+float image_timestamp;
 
 int flow_copy_matched_points(struct flow_matched_point_s *mps)
 {
@@ -27,6 +28,20 @@ int flow_copy_matched_points(struct flow_matched_point_s *mps)
         pthread_mutex_unlock(&mp_mutex);
         return 1;
     }   
+    return 0;
+}
+
+int flow_copy_image(unsigned char *img,float *timestamp)
+{
+    if(image_timestamp > *timestamp){
+        if(pthread_mutex_trylock(&mp_mutex) == 0){
+            memcpy(img,image_buffer,FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT);
+            *timestamp = image_timestamp;
+            pthread_mutex_unlock(&mp_mutex);
+            return FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT;
+        }
+        return 0;
+    }
     return 0;
 }
 
@@ -99,27 +114,55 @@ void *thread_flow(void *arg)
 
     printf("roi start = %d, %d   size = %d, %d  \r\n",roi_start.x,roi_start.y,roi_size.x,roi_size.y); 
     matrix_copy_aera(&raw_img,&roi_img,&roi_start,&roi_size);
-    matrix_binning(&roi_img,&bin1_img);
-    matrix_binning(&bin1_img,&bin2_img);
-    matrix_binning(&bin2_img,&bin3_img);
+    matrix_binning_neon_u8(&roi_img,&bin1_img);
+    matrix_binning_neon_u8(&bin1_img,&bin2_img);
+    matrix_binning_neon_u8(&bin2_img,&bin3_img);
     if(matrix_convert_type(&bin3_img,&prev_img) != 0 ){
         printf("unsupport image type\r\n");
     }
     optflow_lk_create(&optflow0,1,5.0f,0.5f,&opt_win_size);
 
+    /*
+    struct matrix_s neon_test_img_a;
+    struct matrix_s neon_test_img_b;
+    matrix_create(&neon_test_img_a,18,18,1,IMAGE_TYPE_8U);
+    matrix_create(&neon_test_img_b,9,9,1,IMAGE_TYPE_8U);
+    for(j = 0;j < 16*16;j++){
+        neon_test_img_a.data[j] = j;
+    }
+    matrix_binning_neon_u8(&neon_test_img_a,&neon_test_img_b);
+
+    printf("na = \r\n");
+    for(j = 0;j < neon_test_img_a.rows;j++){
+        for(i = 0;i < neon_test_img_a.cols;i++){
+            printf("0x%02x ",neon_test_img_a.data[j * neon_test_img_a.cols + i]);
+        }
+        printf("\r\n");
+    }
+
+    printf("nb = \r\n");
+    for(j = 0;j < neon_test_img_b.rows;j++){
+        for(i = 0;i < neon_test_img_b.cols;i++){
+            printf("0x%02x ",neon_test_img_b.data[j * neon_test_img_b.cols + i]);
+        }
+        printf("\r\n");
+    }
+    
+    */
+
     last = get_time_now();
     while(1) {
         //从摄像头获取一帧图像
-        
-        image = camera_get_image();  
+        image = camera_get_image();
         now = get_time_now();
         dt = (float)(now - last);
         last = now;
+
 		matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
         matrix_copy_aera(&raw_img,&roi_img,&roi_start,&roi_size);
-        matrix_binning(&roi_img,&bin1_img);
-        matrix_binning(&bin1_img,&bin2_img);
-        matrix_binning(&bin2_img,&bin3_img);
+        matrix_binning_neon_u8(&roi_img,&bin1_img);
+        matrix_binning_neon_u8(&bin1_img,&bin2_img);
+        matrix_binning_neon_u8(&bin2_img,&bin3_img);
         if(matrix_convert_type(&bin3_img,&next_img) != 0 ){
             printf("unsupport image type\r\n");
             continue;
@@ -143,13 +186,15 @@ void *thread_flow(void *arg)
 
         pthread_mutex_lock(&mp_mutex);
         for(i = 0; i < 4; i++){
-            flow_mp[i].start_x = (prev_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.0035f;
-            flow_mp[i].start_y = (prev_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.0035f;
-            flow_mp[i].end_x = (next_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.0035f;
-            flow_mp[i].end_y = (next_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.0035f;
+            flow_mp[i].start_x = (prev_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.003f;
+            flow_mp[i].start_y = (prev_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.003f;
+            flow_mp[i].end_x = (next_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.003f;
+            flow_mp[i].end_y = (next_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.003f;
             flow_mp[i].quality = flow_err[i];
             flow_mp[i].timestamp += dt;
         }
+        memcpy(image_buffer,bin3_img.data,FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT);
+        image_timestamp+=dt;
         pthread_mutex_unlock(&mp_mutex);
     }
     camera_deinit();

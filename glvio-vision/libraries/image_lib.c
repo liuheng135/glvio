@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef IMAGE_LIB_USING_NEON
+#include <arm_neon.h>
+#endif
 	
 void matrix_create(struct matrix_s *mat,int cols,int rows,int channel,int type)
 {
@@ -83,6 +87,120 @@ int make_deriv_kernel(struct matrix_s *kx,struct matrix_s *ky,int dx,int dy,int 
 
     return 0;
 }
+
+#ifdef IMAGE_LIB_USING_NEON
+int matrix_binning_u8_8x8(struct matrix_s *src,struct matrix_s *dst,struct point2i *pos)
+{
+    int i;
+    unsigned char buffer[8];
+    unsigned int  *bp1 = (unsigned int *)buffer;
+    unsigned int  *bp2 = (unsigned int *)(buffer+4);
+    unsigned int  *dp1;
+    unsigned int  *dp2;
+    unsigned char *src_ptr = src->data + pos->y * src->cols + pos->x;
+    unsigned char *dst_ptr = dst->data + pos->y / 2 * dst->cols + pos->x / 2;
+
+    uint8x8_t c1;
+    uint8x8_t c2;
+    uint8x8_t ca1;
+    uint8x8_t ca2;
+
+    if(pos->x < 0 || pos->x > (src->cols - 8)){
+        return -1;
+    }
+
+    if(pos->y < 0 || pos->y > (src->rows - 8)){
+        return -1;
+    }
+
+    for(i = 0;i < 2; i++){
+        c1 = vld1_u8(src_ptr);
+        c2 = vld1_u8(src_ptr+src->cols);
+        ca1 = vhadd_u8(c1,c2);
+        ca1 = vshr_n_u8(ca1,1);
+
+        src_ptr += src->cols * 2;
+        c1 = vld1_u8(src_ptr);
+        c2 = vld1_u8(src_ptr+src->cols);
+        ca2 = vhadd_u8(c1,c2);
+        ca2 = vshr_n_u8(ca2,1);
+
+        ca1 = vpadd_u8(ca1,ca2); 
+        vst1_u8(buffer,ca1);
+        dp1 = (unsigned int *)dst_ptr;
+        dp2 = (unsigned int *)(dst_ptr + dst->cols);
+        *dp1 = *bp1;
+        *dp2 = *bp2;
+        src_ptr += src->cols * 2;
+        dst_ptr += dst->cols * 2;
+    }
+    return 0;
+}
+
+int matrix_binning_neon_u8(struct matrix_s *src,struct matrix_s *dst)
+{
+    struct point2i pos;
+    register unsigned int tmp;
+    int i,j,si,sj;
+    int quotient_x = src->cols / 8;
+    int quotient_y = src->rows / 8;
+    int remainder_x = src->cols % 8;
+    int remainder_y = src->rows % 8;
+
+    if(src->type != dst->type || dst->type != IMAGE_TYPE_8U){
+        return -1;
+    }
+
+    if(src->channel != 1 || src->channel != dst->channel){
+        return -2;
+    }
+
+
+    if(dst->cols * 2 != src->cols || dst->rows * 2 != src->rows){
+        return -3;
+    }
+
+    if(dst->data == NULL || src->data == NULL){
+        return -4;
+    }
+
+    for(j = 0; j < src->rows;j+=8){
+        for(i = 0; i < src->cols;i+=8){
+            pos.x = i;
+            pos.y = j;
+            matrix_binning_u8_8x8(src,dst,&pos);
+        }
+    }
+
+    if(remainder_x > 0){
+        printf("rx = %d\r\n",remainder_x);
+        for(j = 0; j < quotient_y * 4;j++){
+            for(i = quotient_x * 4; i < quotient_x * 4 + remainder_x / 2;i++){
+                si = i*2;
+                sj = j*2;
+                tmp = src->data[sj * src->cols + si] + src->data[sj * src->cols + si + 1] \
+                    + src->data[(sj + 1) * src->cols + si] + src->data[(sj + 1) * src->cols + si + 1];
+                dst->data[j * dst->cols + i] = (unsigned char)(tmp >> 2);
+            }
+        }
+    }
+
+    if(remainder_y > 0){
+        printf("ry = %d\r\n",remainder_y);
+        for(j = quotient_y * 4; j < quotient_y * 4 + remainder_y / 2;j++){
+            for(i = 0; i < dst->cols;i++){
+                si = i*2;
+                sj = j*2;
+                tmp = src->data[sj * src->cols + si] + src->data[sj * src->cols + si + 1] \
+                    + src->data[(sj + 1) * src->cols + si] + src->data[(sj + 1) * src->cols + si + 1];
+                dst->data[j * dst->cols + i] = (unsigned char)(tmp >> 2);
+            }
+        }
+    }
+    return 0;
+}
+
+#endif
 
 int matrix_binning(struct matrix_s *src,struct matrix_s *dst)
 {

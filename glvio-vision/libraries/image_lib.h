@@ -1,6 +1,8 @@
 #ifndef _IMAGE_LIB_H_
 #define _IMAGE_LIB_H_
 
+#define IMAGE_LIB_USING_NEON
+
 enum IMAGE_TYPE{
     IMAGE_TYPE_8U  = 0x11,
     IMAGE_TYPE_8S  = 0x21,
@@ -22,6 +24,12 @@ struct matrix_s{
 struct point2f{
     float x;
     float y;
+};
+
+struct point3f{
+    float x;
+    float y;
+    float z;
 };
 
 struct point2i{
@@ -48,5 +56,10 @@ int   matrix_sobel(struct matrix_s *src,struct matrix_s *dst,int dx,int dy);
 int   matrix_copy_channel(struct matrix_s *src,struct matrix_s *dst,int src_ch,int dst_ch);
 void  print_memory_int(void *addr,int len);
 void  matrix_destroy(struct matrix_s *mat);
+
+#ifdef IMAGE_LIB_USING_NEON
+int   matrix_binning_u8_8x8(struct matrix_s *src,struct matrix_s *dst,struct point2i *pos);
+int   matrix_binning_neon_u8(struct matrix_s *src,struct matrix_s *dst);
+#endif
 
 #endif
