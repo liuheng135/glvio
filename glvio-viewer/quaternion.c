@@ -113,38 +113,21 @@ void  quater_rotate(float *res,float *v,struct quaternion_s *q)
     res[2] = qm.z;
 }
 
-void dcm_to_quaternion(struct quaternion_s *q,float d[3][3])
+void quater_update_by_gyroscope(struct quaternion_s *a,float *gyro,float dt)
 {
-    float tr = d[0][0] + d[1][1] + d[2][2];
-    float tq[4];
-	if (tr > 0.0f) {
-		float s = sqrtf(tr + 1.0f);
-		tq[0] = s * 0.5f;
-		s = 0.5f / s;
-		tq[1] = (d[2][1] - d[1][2]) * s;
-		tq[2] = (d[0][2] - d[2][0]) * s;
-		tq[3] = (d[1][0] - d[0][1]) * s;
-	} else {
-		/* Find maximum diagonal element in dcm
-		* store index in dcm_i */
-		int dcm_i = 0,i = 0;
-		for (i = 1; i < 3; i++) {
-			if (d[i][i] > d[dcm_i][dcm_i]) {
-				dcm_i = i;
-			}
-		}
-		int dcm_j = (dcm_i + 1) % 3;
-		int dcm_k = (dcm_i + 2) % 3;
-		float s = sqrtf((d[dcm_i][dcm_i] - d[dcm_j][dcm_j] -
-		d[dcm_k][dcm_k]) + 1.0f);
-		tq[dcm_i + 1] = s * 0.5f;
-		s = 0.5f / s;
-		tq[dcm_j + 1] = (d[dcm_i][dcm_j] + d[dcm_j][dcm_i]) * s;
-		tq[dcm_k + 1] = (d[dcm_k][dcm_i] + d[dcm_i][dcm_k]) * s;
-		tq[0] = (d[dcm_k][dcm_j] - d[dcm_j][dcm_k]) * s;
-	}
-    q->w = tq[0];
-    q->x = tq[1];
-    q->y = tq[2];
-    q->z = tq[3];
+    float qw,qx,qy,qz;
+
+    gyro[0] *= (0.5f * dt); 
+    gyro[1] *= (0.5f * dt);
+    gyro[2] *= (0.5f * dt);
+    qw = a->w;
+    qx = a->x;
+    qy = a->y;
+	qz = a->z;
+    a->w += (-qx * gyro[0] - qy * gyro[1] - qz * gyro[2]);
+    a->x += ( qw * gyro[0] + qy * gyro[2] - qz * gyro[1]);
+    a->y += ( qw * gyro[1] - qx * gyro[2] + qz * gyro[0]);
+    a->z += ( qw * gyro[2] + qx * gyro[1] - qy * gyro[0]);
+  
+    quater_normlize(a,a);
 }

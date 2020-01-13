@@ -23,5 +23,8 @@ LIB += -lopencv_viz
 #LIB += -lpcl_features
 #LIB += -lpcl_keypoints
 
-main:main.o
-	g++ main.cpp csv.cpp quaternion.c att_est_imu.cpp ahrs.c visual_odometry.cpp rotation.c $(INCLUDE) $(LIB) -o glvio.o
+all:
+	g++ glvio-receiver.cpp lwlink.c udp.c quaternion.c  $(INCLUDE) $(LIB) -o glvio-viewer.o
+
+clean:
+	rm *.o
