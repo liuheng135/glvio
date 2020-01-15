@@ -27,6 +27,7 @@ void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct g
     float m1,m2;
     float n1,n2;
     float denominator;
+    float s;
 
     ka1 = calculate_ka(p1);
     ka2 = calculate_ka(p2);
@@ -51,6 +52,16 @@ void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct g
         T->y = (n2 * kb1 * p1.l.y - n1 * kb2 * p2.l.y) / denominator;
     }else{
         T->y = 0.f;
+    }
+
+    denominator = p1.l.x * p1.r.y - p1.l.y * p1.r.x;
+    if(denominator != 0.f){
+        s  = (p1.l.y * T->x - p1.l.x * T->y) / denominator;
+    }
+    if(T->x + p1.r.x * s < 0){
+        T->x = -T->x;
+        T->y = -T->y;
+        T->z = -T->z;
     }
 }
 

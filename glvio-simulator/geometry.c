@@ -1,11 +1,11 @@
 #include "geometry.h"
 
-float calculate_a(struct geo_matches_s p)
+float calculate_ka(struct geo_matches_s p)
 {
     return p.l.z * p.r.y - p.l.y * p.r.z;
 }
 
-float calculate_b(struct geo_matches_s p)
+float calculate_kb(struct geo_matches_s p)
 {
     return p.l.x * p.r.y - p.l.y * p.r.x;
 }
@@ -27,6 +27,7 @@ void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct g
     float m1,m2;
     float n1,n2;
     float denominator;
+    float s;
 
     ka1 = calculate_ka(p1);
     ka2 = calculate_ka(p2);
@@ -52,6 +53,16 @@ void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct g
     }else{
         T->y = 0.f;
     }
+
+    denominator = p1.l.x * p1.r.y - p1.l.y * p1.r.x;
+    if(denominator != 0.f){
+        s  = (p1.l.y * T->x - p1.l.x * T->y) / denominator;
+    }
+    if(T->x + p1.r.x * s < 0){
+        T->x = -T->x;
+        T->y = -T->y;
+        T->z = -T->z;
+    }
 }
 
 void geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f T)
@@ -61,7 +72,7 @@ void geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f
 
     denominator = mp.l.x * mp.r.y - mp.l.y * mp.r.x;
     if(denominator != 0.f){
-        s = (mp.l.y * T.x - mp.l.x * T.y) / denominator;
+        s  = (mp.l.y * T.x - mp.l.x * T.y) / denominator;
         p->x = T.x + mp.r.x * s;
         p->y = T.y + mp.r.y * s;
         p->z = T.z + mp.r.z * s;
