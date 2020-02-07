@@ -98,6 +98,8 @@ void vio_update(float dt)
         eulur_to_quater(&rotation,&ie);
         vio_att_buffer_rptr = vio_att_buffer_wptr - VIO_FLOW_DELAY_NUM;
 
+
+        /* calulate rotation by integrating */
         while(gyro_integraton < flow_interval){
             gyro_integraton += vio_imu_buffer[vio_att_buffer_rptr % VIO_ATT_BUFFER_LEN].dt;
             quater_update_by_gyroscope(&rotation,vio_imu_buffer[vio_att_buffer_rptr % VIO_ATT_BUFFER_LEN].gyro,vio_imu_buffer[vio_att_buffer_rptr % VIO_ATT_BUFFER_LEN].dt);
@@ -114,12 +116,14 @@ void vio_update(float dt)
             v_compansate[1] = mp[i].start_y;
             v_compansate[2] = 1.0f;
 
+            /* calculate compansation */
             quater_rotate(v_compansate,v_compansate,&rotation);
 
             vio_data.point_start[i].x = mp[i].start_x;
             vio_data.point_start[i].y = mp[i].start_y;
             vio_data.point_start[i].z = 1.0f;
 
+            /* compansate */
             vio_data.point_end[i].x = mp[i].end_x - v_compansate[0] + mp[i].start_x;
             vio_data.point_end[i].y = mp[i].end_y - v_compansate[1] + mp[i].start_y;
             vio_data.point_end[i].z = v_compansate[2];
@@ -132,6 +136,7 @@ void vio_update(float dt)
             gmp[i].r.z = vio_data.point_end[i].z;
         }
 
+        /* recovery pose */
         geo_recovery_translation(&translation,gmp[0],gmp[1]);
 
         /*

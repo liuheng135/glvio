@@ -57,7 +57,10 @@ void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct g
     denominator = p1.l.x * p1.r.y - p1.l.y * p1.r.x;
     if(denominator != 0.f){
         s  = (p1.l.y * T->x - p1.l.x * T->y) / denominator;
+    }else{
+        s = 0;
     }
+
     if(T->x + p1.r.x * s < 0){
         T->x = -T->x;
         T->y = -T->y;
@@ -67,6 +70,7 @@ void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct g
 
 void geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f T)
 {
+    
     float s;
     float denominator;
 
