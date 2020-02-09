@@ -86,7 +86,7 @@ int net_register(void)
 	net0_dev.ioctl = NULL;
 	net0_dev.priv_data = &net0_data;
 
-	memcpy(net0_data.ip,AW_UDP_IP,sizeof(AW_UDP_IP));
+	//memcpy(net0_data.ip,AW_UDP_IP,sizeof(AW_UDP_IP));
 	net0_data.port = AW_UDP_PORT;
 
 	net1_dev.init  = network_init;
