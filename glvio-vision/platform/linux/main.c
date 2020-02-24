@@ -23,6 +23,7 @@
 #include "app_gllink.h"
 #include "app_log.h"
 #include "app_mavlink.h"
+#include "app_anoclink.h"
 
 #define MAIN_LOOP_TIME	(1.0f/MAIN_LOOP_HZ)
 #define MAX_SAFE_STACK  512 * 1024  
@@ -107,8 +108,9 @@ int thread_vio(void* paramter)
 	imu_init();
 	calibrator_init();
     //lwlink_init();
-    mavlink_init();
-    vio_init();
+    //mavlink_init();
+    anoclink_init();
+	vio_init();
     //log_init();
 	param_load();
 	get_diff_time(&prev,true);
@@ -126,8 +128,9 @@ int thread_vio(void* paramter)
 			calibrator_update(dt);
             vio_update(dt);
             //lwlink_update(dt);
-            mavlink_update(dt);
-            param_update(dt);
+            //mavlink_update(dt);
+            anoclink_update(dt);
+			param_update(dt);
             //log_update(dt);
 		}else{
 			printf("over skip:%3.3f\n",dt);

@@ -33,7 +33,8 @@ int network_init(struct hal_dev_s *dev)
 	bzero(&dat->addr, sizeof(dat->addr));
 	dat->addr.sin_family = AF_INET;
 	dat->addr.sin_port = htons(dat->port);
-	dat->addr.sin_addr.s_addr = htonl(INADDR_ANY) ;
+	//dat->addr.sin_addr.s_addr = inet_addr(dat->ip);
+	dat->addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	flag = fcntl(dat->socket_fd , F_GETFL , 0);
 	fcntl(dat->socket_fd,F_SETFL,flag | O_NONBLOCK);
 	
@@ -66,8 +67,8 @@ int network_write(struct hal_dev_s *dev, const void *buffer, int size,int pos)
 #define AW_UDP_PORT            9696
 #define AW_UDP_IP              "192.168.100.1"
 
-#define LW_UDP_PORT            3366
-
+#define LW_UDP_PORT            14550
+#define LW_UDP_IP              "192.168.0.255"
 
 struct net_data_s net0_data;
 struct hal_dev_s  net0_dev;
@@ -97,6 +98,7 @@ int net_register(void)
 	net1_dev.ioctl = NULL;
 	net1_dev.priv_data = &net1_data;
 
+    memcpy(net1_data.ip,LW_UDP_IP,sizeof(LW_UDP_IP));
 	net1_data.port = LW_UDP_PORT;
 
 	//hal_dev_register(&net0_dev,"net0",HAL_O_RDWR);

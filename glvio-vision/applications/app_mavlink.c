@@ -32,8 +32,8 @@ void mavlink_send_data(int fd,float dt)
     
     mavlink_send_timer+=dt;
     
-    if(mavlink_send_timer > 0.02f){
-        mavlink_send_timer -= 0.02f;
+    if(mavlink_send_timer > 0.2f){
+        mavlink_send_timer -= 0.2f;
          
         mavlink_msg_heartbeat_pack(1, 200, &msg, MAV_TYPE_QUADROTOR, MAV_AUTOPILOT_GENERIC, MAV_MODE_MANUAL_DISARMED, 0, MAV_STATE_STANDBY);
         msg_length = mavlink_msg_to_send_buffer(mavlink_global_buffer, &msg);
@@ -46,6 +46,7 @@ void mavlink_send_data(int fd,float dt)
 		mavlink_msg_attitude_pack(1, 200, &msg,100000000,0.0f,0.1f,0.1f,0.0f,0.0f,0.0f);
 		msg_length = mavlink_msg_to_send_buffer(mavlink_global_buffer, &msg);
 		hal_dev_write(fd,mavlink_global_buffer,msg_length,0);
+		printf("mavlink send\r\n");
     }
 }
 

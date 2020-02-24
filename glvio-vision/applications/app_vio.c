@@ -165,8 +165,7 @@ void vio_update(float dt)
         vio_data.translation.x = translation.x;
         vio_data.translation.y = translation.y;
         vio_data.translation.z = translation.z; 
-        printf("T = %9.3f %9.3f %9.3f scale = %10.6f\r\n",vio_data.translation.x,vio_data.translation.y,\
-                                                            vio_data.translation.z,vio_data.translation_scale);
+        //printf("T = %9.3f %9.3f %9.3f scale = %10.6f\r\n",vio_data.translation.x,vio_data.translation.y,vio_data.translation.z,vio_data.translation_scale);
     }
 
     vio_print_timer += dt;
