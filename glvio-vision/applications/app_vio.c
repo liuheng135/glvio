@@ -58,12 +58,15 @@ void vio_update(float dt)
 {
     int i;
     struct eulur_s              ie = {0,0,0};
-    struct quaternion_s         rotation;
-    struct point3f              translation;
+    struct eulur_s              re = {0,0,0};
+    
     struct gyro_data_s          gyro;
     struct acc_data_s           acc;
-    struct flow_matched_point_s mp[4];
-    struct geo_matches_s        gmp[4];
+    struct flow_matched_point_s points_matched_from_flow[4];
+    struct geo_matches_s        points_matched_for_geo[4];
+
+    struct quaternion_s         rotation;
+    struct point3f              translation;
     
     /*
     float  translation_length;
@@ -71,8 +74,7 @@ void vio_update(float dt)
     float  temp;
     */
    
-    float  v_compansate[3];
-
+    float  vector_compansate[3];
     float  flow_interval;
     float  gyro_integraton;
 
@@ -89,15 +91,14 @@ void vio_update(float dt)
     if(vio_att_buffer_wptr - VIO_ATT_BUFFER_LEN < 0){
         return;
     }
-    flow_copy_matched_points(mp);
-    if(mp[0].timestamp > flow_data_timestamp){
-        flow_interval = mp[0].timestamp - flow_data_timestamp;
-        flow_data_timestamp = mp[0].timestamp;
+    flow_copy_matched_points(points_matched_from_flow);
+    if(points_matched_from_flow[0].timestamp > flow_data_timestamp){
+        flow_interval = points_matched_from_flow[0].timestamp - flow_data_timestamp;
+        flow_data_timestamp = points_matched_from_flow[0].timestamp;
 
         gyro_integraton = 0.f;
         eulur_to_quater(&rotation,&ie);
         vio_att_buffer_rptr = vio_att_buffer_wptr - VIO_FLOW_DELAY_NUM;
-
 
         /* calulate rotation by integrating */
         while(gyro_integraton < flow_interval){
@@ -112,66 +113,59 @@ void vio_update(float dt)
         vio_data.rotation = rotation;
 
         for(i = 0; i < 4; i++){
-            v_compansate[0] = mp[i].start_x;
-            v_compansate[1] = mp[i].start_y;
-            v_compansate[2] = 1.0f;
+            vector_compansate[0] = points_matched_from_flow[i].start_x;
+            vector_compansate[1] = points_matched_from_flow[i].start_y;
+            vector_compansate[2] = 1.0f;
 
             /* calculate compansation */
-            quater_rotate(v_compansate,v_compansate,&rotation);
+            quater_rotate(vector_compansate,vector_compansate,&rotation);
 
-            vio_data.point_start[i].x = mp[i].start_x;
-            vio_data.point_start[i].y = mp[i].start_y;
+            vio_data.point_start[i].x = points_matched_from_flow[i].start_x;
+            vio_data.point_start[i].y = points_matched_from_flow[i].start_y;
             vio_data.point_start[i].z = 1.0f;
 
             /* compansate */
-            vio_data.point_end[i].x = mp[i].end_x - v_compansate[0] + mp[i].start_x;
-            vio_data.point_end[i].y = mp[i].end_y - v_compansate[1] + mp[i].start_y;
-            vio_data.point_end[i].z = v_compansate[2];
-            gmp[i].l.x = vio_data.point_start[i].x;
-            gmp[i].l.y = vio_data.point_start[i].y;
-            gmp[i].l.z = vio_data.point_start[i].z;
+            vio_data.point_end[i].x = points_matched_from_flow[i].end_x - vector_compansate[0] + points_matched_from_flow[i].start_x;
+            vio_data.point_end[i].y = points_matched_from_flow[i].end_y - vector_compansate[1] + points_matched_from_flow[i].start_y;
+            vio_data.point_end[i].z = vector_compansate[2];
+            points_matched_for_geo[i].l.x = vio_data.point_start[i].x;
+            points_matched_for_geo[i].l.y = vio_data.point_start[i].y;
+            points_matched_for_geo[i].l.z = vio_data.point_start[i].z;
 
-            gmp[i].r.x = vio_data.point_end[i].x;
-            gmp[i].r.y = vio_data.point_end[i].y;
-            gmp[i].r.z = vio_data.point_end[i].z;
+            points_matched_for_geo[i].r.x = vio_data.point_end[i].x;
+            points_matched_for_geo[i].r.y = vio_data.point_end[i].y;
+            points_matched_for_geo[i].r.z = vio_data.point_end[i].z;
         }
 
         /* recovery pose */
-        geo_recovery_translation(&translation,gmp[0],gmp[1]);
-
-        /*
-        vio_data.velocity.x = translation.x / flow_interval;
-        vio_data.velocity.y = translation.y / flow_interval;
-        vio_data.velocity.z = translation.z / flow_interval;
-
-        vio_data.accle.x   = (vio_data.velocity.x - vio_data.velocity_last.x) / flow_interval; 
-        vio_data.accle.y   = (vio_data.velocity.y - vio_data.velocity_last.y) / flow_interval;
-        vio_data.accle.z   = (vio_data.velocity.z - vio_data.velocity_last.z) / flow_interval;
-
-        translation_length  = sqrt(vio_data.accle.x * vio_data.accle.x + vio_data.accle.y * vio_data.accle.y * vio_data.accle.z * vio_data.accle.z);
-
-        vio_att_buffer_rptr = (vio_att_buffer_wptr - VIO_FLOW_DELAY_NUM) % VIO_ATT_BUFFER_LEN;
-        accel_length = sqrt(vio_imu_buffer[vio_att_buffer_rptr].acc[0] * vio_imu_buffer[vio_att_buffer_rptr].acc[0] + \
-                            vio_imu_buffer[vio_att_buffer_rptr].acc[1] * vio_imu_buffer[vio_att_buffer_rptr].acc[1] + \
-                            vio_imu_buffer[vio_att_buffer_rptr].acc[2] * vio_imu_buffer[vio_att_buffer_rptr].acc[2]);
-
-        temp = accel_length / translation_length;
-        vio_data.translation_scale += (temp - vio_data.translation_scale) * 0.1f;
-        vio_data.translation.x = translation.x * vio_data.translation_scale * 1000.f;
-        vio_data.translation.y = translation.y * vio_data.translation_scale * 1000.f;
-        vio_data.translation.z = translation.z * vio_data.translation_scale * 1000.f;
-        */
+        geo_recovery_translation(&translation,points_matched_for_geo[0],points_matched_for_geo[1]);
 
         vio_data.translation.x = translation.x;
         vio_data.translation.y = translation.y;
         vio_data.translation.z = translation.z; 
-        //printf("T = %9.3f %9.3f %9.3f scale = %10.6f\r\n",vio_data.translation.x,vio_data.translation.y,vio_data.translation.z,vio_data.translation_scale);
+
+        if(geo_recovery_depth(&vio_data.point_recoveried[0],points_matched_for_geo[0],translation) > -1){
+            geo_recovery_depth(&vio_data.point_recoveried[1],points_matched_for_geo[1],translation);
+        }else{
+            printf("can not recover depth\r\n");
+        }
     }
 
-    vio_print_timer += dt;
-    if(vio_print_timer > 0.1f){
+    //vio_print_timer += dt;
+    if(vio_print_timer > 0.05f){
         vio_print_timer = 0.f;
-        //printf("att = %f %f %f %f \r\n",vio_data.att.w,vio_data.att.x,vio_data.att.y,vio_data.att.z);
+        quater_to_eulur(&re,&vio_data.rotation);
+
+        vio_log_len = sprintf(vio_log_buffer," %f , %f, %f, %f \r\n",re.roll,re.pitch,
+                        (points_matched_from_flow[0].end_x - points_matched_from_flow[0].start_x),
+                        (points_matched_from_flow[0].end_y - points_matched_from_flow[0].start_y));
+        if(vio_log_fd > 0){
+
+            write(vio_log_fd,vio_log_buffer,vio_log_len);
+        }
+        printf("points: [%9.3f %9.3f %9.3f],[%9.3f %9.3f %9.3f]\r\n",
+            vio_data.point_recoveried[0].x,vio_data.point_recoveried[0].y,vio_data.point_recoveried[0].z,
+            vio_data.point_recoveried[1].x,vio_data.point_recoveried[1].y,vio_data.point_recoveried[1].z);
     }
     vio_att_buffer_wptr++;
 }

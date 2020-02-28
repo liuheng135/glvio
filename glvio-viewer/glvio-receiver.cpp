@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
    
     printf("viewer start...\r\n");
 
-    udp_init(&udp0,ip_addr,3366);
+    udp_init(&udp0,ip_addr,14550);
     lwlink_data_handler_init(&link_handler,0x02);
     udp_send(&udp0,hello,5);
 

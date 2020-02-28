@@ -12,7 +12,6 @@ struct optflow_lk{
     struct matrix_s kx10;
     struct matrix_s ky10;
 
-
     struct matrix_s kx20;
     struct matrix_s ky20;
     
@@ -24,6 +23,7 @@ struct optflow_lk{
 
     struct matrix_s kx11;
     struct matrix_s ky11;
+
     /* ch0 ~ I */
     /* ch1 ~ Ix */
     /* ch2 ~ Iy */

@@ -107,9 +107,9 @@ int thread_vio(void* paramter)
     app_events_init();
 	imu_init();
 	calibrator_init();
-    //lwlink_init();
+    lwlink_init();
     //mavlink_init();
-    anoclink_init();
+    //anoclink_init();
 	vio_init();
     //log_init();
 	param_load();
@@ -127,9 +127,9 @@ int thread_vio(void* paramter)
 			imu_update(dt);
 			calibrator_update(dt);
             vio_update(dt);
-            //lwlink_update(dt);
+            lwlink_update(dt);
             //mavlink_update(dt);
-            anoclink_update(dt);
+            //anoclink_update(dt);
 			param_update(dt);
             //log_update(dt);
 		}else{

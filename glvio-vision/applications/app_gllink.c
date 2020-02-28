@@ -36,17 +36,18 @@ void lwlink_send_data(int fd,float dt)
 {
     int i;
 
+    struct flow_matched_point_s flow_mp_2d[4];
+    struct lwlink_feature2D_s gfp_2d;
     struct lwlink_feature3D_s fp;
     struct lwlink_attitude_s att;
     struct lwlink_local_position_s lpos;
     struct vio_data_s vio_dat;
     struct eulur_s vio_att_e;
-
     float vr[3];
-    
     int msg_length;
     
-    lwlink_send_timer_20hz+=dt;
+    //lwlink_send_timer_20hz += dt;
+    lwlink_send_timer_10hz += dt;
     
     if(lwlink_send_timer_20hz > 0.1f){
         lwlink_send_timer_20hz -= 0.1f;
@@ -107,10 +108,28 @@ void lwlink_send_data(int fd,float dt)
 
     if(lwlink_send_timer_10hz > 0.1f){
         lwlink_send_timer_10hz -= 0.1f;
-        /*if(flow_copy_image(gllink_image_buffer,&gllink_image_timestamp) > 0){
+
+        if(flow_copy_image(gllink_image_buffer,&gllink_image_timestamp) > 0){
             msg_length = lwlink_msg_pack(&lwlink_handler,MSG_TYPE_RAW_IMAGE,gllink_image_buffer,FLOW_IMAGE_WIDTH * FLOW_IMAGE_WIDTH);
             hal_dev_write(fd,lwlink_handler.txbuf,msg_length,0);
-        }*/
+        }
+
+        if(flow_copy_matched_points(flow_mp_2d) > 0){
+
+            for(i = 0;i < 4;i++){
+                gfp_2d.image_id = 0;
+                gfp_2d.feature_id = i;
+                gfp_2d.pos_x = flow_mp_2d[i].start_x / 0.00425f + 30.f;
+                gfp_2d.pos_y = flow_mp_2d[i].start_y / 0.00425f + 30.f;
+
+                gfp_2d.vel_x = (flow_mp_2d[i].end_x - flow_mp_2d[i].start_x)/ 0.00425f;
+                gfp_2d.vel_y = (flow_mp_2d[i].end_y - flow_mp_2d[i].start_y)/ 0.00425f;
+
+                
+                msg_length = lwlink_msg_pack(&lwlink_handler,MSG_TYPE_FEATURE2D,(uint8_t *)&gfp_2d,sizeof(gfp_2d));
+                hal_dev_write(fd,lwlink_handler.txbuf,msg_length,0);
+            }
+        }
     }
 }
 

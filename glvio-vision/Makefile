@@ -3,7 +3,7 @@
 PROJECT_DIR  = $(shell pwd)
 #export CROSS_COMPILE=$(PROJECT_DIR)../out/sun8iw8p1/linux/common/buildroot/external-toolchain/bin/arm-buildroot-linux-musleabi-
 
-export CROSS_COMPILE=~/share/levetop-t1s-sdk/out/sun8iw8p1/linux/common/buildroot/external-toolchain/bin/arm-buildroot-linux-musleabi-
+export CROSS_COMPILE=~/share/glvio-sdk/out/sun8iw8p1/linux/common/buildroot/external-toolchain/bin/arm-buildroot-linux-musleabi-
 
 export AS              = $(CROSS_COMPILE)as
 export CC              = $(CROSS_COMPILE)gcc

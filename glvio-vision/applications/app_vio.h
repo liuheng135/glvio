@@ -25,6 +25,7 @@ struct vio_data_s {
 
     struct point3f point_start[4];
     struct point3f point_end[4];
+    struct point3f point_recoveried[4];
 };
 
 void vio_get_data(struct vio_data_s *dat);

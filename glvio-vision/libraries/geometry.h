@@ -10,7 +10,7 @@ struct geo_matches_s{
 };
 
 void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct geo_matches_s p2);
-void geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f T);
+int geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f T);
 
 
 

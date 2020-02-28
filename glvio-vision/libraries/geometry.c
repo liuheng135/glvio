@@ -68,7 +68,7 @@ void geo_recovery_translation(struct point3f *T,struct geo_matches_s p1,struct g
     }
 }
 
-void geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f T)
+int geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f T)
 {
     
     float s;
@@ -80,10 +80,12 @@ void geo_recovery_depth(struct point3f *p,struct geo_matches_s mp,struct point3f
         p->x = T.x + mp.r.x * s;
         p->y = T.y + mp.r.y * s;
         p->z = T.z + mp.r.z * s;
+        return 0;
     }else{
         s = 0.f;
         p->x = 0.f;
         p->y = 0.f;
         p->z = 0.f;
+        return -1;
     } 
 }
