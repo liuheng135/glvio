@@ -65,12 +65,8 @@ static inline double get_time_now(void)
 	return dt;
 }
 
-int image_buffer_a[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
-int image_buffer_b[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
-
-unsigned char image_binning_buffer_0[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT * 16];
-unsigned char image_binning_buffer_1[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT * 4];
-unsigned char image_binning_buffer_2[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+unsigned char image_buffer_a[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 4];
+unsigned char image_buffer_b[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 4];
 
 void *thread_flow(void *arg)
 {
@@ -85,25 +81,17 @@ void *thread_flow(void *arg)
     double last;
 	
 	struct matrix_s raw_img;
-    struct matrix_s roi_img;
-    struct matrix_s bin1_img;
-	struct matrix_s bin2_img;
 
     struct matrix_s prev_img;
     struct matrix_s next_img;
 
-	struct point2i roi_start = {
-            .x = (CAM0_IMAGE_WIDTH  - FLOW_IMAGE_WIDTH * 4) / 2,
-            .y = (CAM0_IMAGE_HEIGHT - FLOW_IMAGE_HEIGHT * 4)  /2,};
-
-	struct size2i  roi_size = {.x = FLOW_IMAGE_WIDTH * 4, .y = FLOW_IMAGE_HEIGHT * 4};
     struct size2i  opt_win_size = {.x = 17,.y = 17}; 
 
     struct point2f prev_point[4];
     struct point2f next_point[4];
     float  flow_err[4];
 
-    struct block_sad_info_s block_sad_list[FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT / 64];
+    struct block_sad_info_s block_sad_list[CAM0_IMAGE_WIDTH * CAM0_IMAGE_HEIGHT / 64];
     struct block_sad_info_s block_best[4];
     int block_count;
 
@@ -114,20 +102,9 @@ void *thread_flow(void *arg)
     
     image = camera_get_image(); 
     matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
-    matrix_init(&roi_img,FLOW_IMAGE_WIDTH * 4,FLOW_IMAGE_HEIGHT * 4,1,IMAGE_TYPE_8U,image_binning_buffer_0);
-    matrix_init(&bin1_img,FLOW_IMAGE_WIDTH * 2,FLOW_IMAGE_HEIGHT * 2,1,IMAGE_TYPE_8U,image_binning_buffer_1);
-    matrix_init(&bin2_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image_binning_buffer_2);
-
-    matrix_init(&prev_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_32S,(unsigned char *)image_buffer_a);
-    matrix_init(&next_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_32S,(unsigned char *)image_buffer_b);
-
-    printf("roi start = %d, %d   size = %d, %d  \r\n",roi_start.x,roi_start.y,roi_size.x,roi_size.y); 
-    matrix_copy_aera(&raw_img,&roi_img,&roi_start,&roi_size);
-    matrix_binning_neon_u8(&roi_img,&bin1_img);
-    matrix_binning_neon_u8(&bin1_img,&bin2_img);
-    if(matrix_convert_type(&bin2_img,&prev_img) != 0 ){
-        printf("unsupport image type\r\n");
-    }
+    matrix_init(&prev_img,CAM0_IMAGE_WIDTH / 2,CAM0_IMAGE_HEIGHT / 2,1,IMAGE_TYPE_8U,image_buffer_a);
+    matrix_init(&next_img,CAM0_IMAGE_WIDTH / 2,CAM0_IMAGE_HEIGHT / 2,1,IMAGE_TYPE_8U,image_buffer_b);
+    matrix_binning_neon_u8(&raw_img,&prev_img);
     optflow_lk_create(&optflow0,1,5.0f,0.5f,&opt_win_size);
 
     last = get_time_now();
@@ -139,21 +116,15 @@ void *thread_flow(void *arg)
         last = now;
 
 		matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
-        matrix_copy_aera(&raw_img,&roi_img,&roi_start,&roi_size);
-        matrix_binning_neon_u8(&roi_img,&bin1_img);
-        matrix_binning_neon_u8(&bin1_img,&bin2_img);
-        if(matrix_convert_type(&bin2_img,&next_img) != 0 ){
-            printf("unsupport image type\r\n");
-            continue;
-        }
+        matrix_binning_neon_u8(&raw_img,&next_img);
 
         block_count = 0;
-        for(j = 12;j < bin2_img.cols-12;j+=8){
-            for(i = 12 ;i < bin2_img.rows-12 ;i+=8){
+        for(j = 12;j < next_img.cols-12;j+=8){
+            for(i = 12 ;i < next_img.rows-12 ;i+=8){
                 block_sad_list[block_count].id = block_count;
                 block_sad_list[block_count].pos.x = i-4;
                 block_sad_list[block_count].pos.y = j-4;
-                block_sad_list[block_count].sad = matrix_block_sad_8x8_neon_u8(&bin2_img,&block_sad_list[block_count].pos);
+                block_sad_list[block_count].sad = matrix_block_sad_8x8_neon_u8(&next_img,&block_sad_list[block_count].pos);
                 block_count++;
             }
         }
@@ -169,13 +140,14 @@ void *thread_flow(void *arg)
             }
             block_sad_list[block_best[j].id].sad = 0;
         }
-
+        /*
         printf("best: [%2d,%2d,%4d],[%2d,%2d,%4d],[%2d,%2d,%4d],[%2d,%2d,%4d]\r\n",
                     block_best[0].pos.x,block_best[0].pos.y,block_best[0].sad,
                     block_best[1].pos.x,block_best[1].pos.y,block_best[1].sad,
                     block_best[2].pos.x,block_best[2].pos.y,block_best[2].sad,
                     block_best[3].pos.x,block_best[3].pos.y,block_best[3].sad
         );
+        */
 
         for(j = 0;j < 4;j++){
             prev_point[j].x = block_best[j].pos.x+4;
@@ -183,12 +155,15 @@ void *thread_flow(void *arg)
         }
 
         for(i = 0; i < 4; i++){
-            optflow_lk_calc(&optflow0,&prev_img,&next_img,&prev_point[i],&next_point[i],&flow_err[i]);
+            //optflow_lk_calc(&optflow0,&prev_img,&next_img,&prev_point[i],&next_point[i],&flow_err[i]);
+            optflow_lk_calc_neon_u8(&optflow0,&prev_img,&next_img,&prev_point[i],&next_point[i],&flow_err[i]);
         }
 
         swap_ptr = next_img.data;
         next_img.data = prev_img.data;
         prev_img.data = swap_ptr;
+
+        printf("flow = %f %f \r\n",next_point[0].x - prev_point[0].x,next_point[0].y - prev_point[0].y);
 
         pthread_mutex_lock(&mp_mutex);
         for(i = 0; i < 4; i++){
@@ -199,7 +174,8 @@ void *thread_flow(void *arg)
             flow_mp[i].quality = flow_err[i];
             flow_mp[i].timestamp += dt;
         }
-        memcpy(image_buffer,bin2_img.data,FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT);
+        
+        //memcpy(image_buffer,bin2_img.data,FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT);
         image_timestamp+=dt;
         pthread_mutex_unlock(&mp_mutex);
     }

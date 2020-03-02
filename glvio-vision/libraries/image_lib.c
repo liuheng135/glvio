@@ -384,7 +384,6 @@ int matrix_sobel_neon(struct matrix_s *src,struct matrix_s *dst,int dx,int dy)
         buffer[0] = *ptra * *(ptrb + i);
         buffer[1] = *(ptra + 1) * *(ptrb + i);
         buffer[2] = *(ptra + 2) * *(ptrb + i);
-        printf("k = %d %d %d \r\n",buffer[0],buffer[1],buffer[2]);
         vkernel[i] = vld1q_s32(buffer);
     }
     
