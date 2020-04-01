@@ -117,7 +117,7 @@ void optflow_lk_destroy(struct optflow_lk *op)
     matrix_destroy(&op->kx20);
 }
 
-void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err)
+int optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err)
 {
 	int i,j,k,ii,jj;
 	int *src;
@@ -143,8 +143,20 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
 	float It,Ixt,Iyt;
 	float b1, b2,ib1,ib2;
 	float *Ibuf;
-	float delta_x,delta_y;
+	float delta_x,delta_y,delta_length;
 	struct point2f new_point;
+
+    if((ppx + 1 + win_size_half_x > prev_img->cols) ||(ppy + 1 + win_size_half_y > prev_img->rows)){
+        next_point->x = prev_point->x;
+        next_point->y = prev_point->y;
+        return -1;
+    }
+
+    if((ppx - win_size_half_x < 0) ||(ppy - win_size_half_y < 0)){
+        next_point->x = prev_point->x;
+        next_point->y = prev_point->y;
+        return -1;
+    }
 	
     a = prev_point->x - (float)ppx;
     b = prev_point->y - (float)ppy;
@@ -155,6 +167,7 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
     weight[3] = a*b;
     
     Ibuf = (float *)(op->deriv_buffer.data);
+
     for(j = 0; j < op->win_size.y; j++){
         for(i = 0; i < op->win_size.x; i++){
             ii = ppx - win_size_half_x + i;
@@ -212,6 +225,7 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
             Ibuf +=  op->deriv_buffer.channel;
         }
     }
+
     A11 = lambda1*iA11 + lambda2*A11;
     A12 = lambda1*iA12 + lambda2*A12;
     A22 = lambda1*iA22 + lambda2*A22;
@@ -225,7 +239,7 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
     {
         next_point->x = prev_point->x;
         next_point->y = prev_point->y;
-        return;
+        return -3;
     }
     D = 1./D;
 
@@ -290,26 +304,38 @@ void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matr
         delta_x = (A12*b2 - A22*b1) * D;
         delta_y = (A12*b1 - A11*b2) * D;
 
+        delta_length = sqrt(delta_x * delta_x + delta_y * delta_y);
+
+        if( delta_length > op->max_vel){
+            next_point->x = prev_point->x + delta_x * op->max_vel / delta_length;
+            next_point->y = prev_point->y + delta_y * op->max_vel / delta_length;
+            return 0;
+        }
+
         new_point.x += delta_x;
         new_point.y += delta_y;
 
-        if((fabs(new_point.x - prev_point->x) > op->max_vel) ||  (fabs(new_point.y - prev_point->y) > op->max_vel)){
+        if(((int)(new_point.x) + 1 + win_size_half_x > next_img->cols) || ((int)(new_point.y)  + 1 + win_size_half_y > next_img->rows)){
             break;
         }
 
-        if((delta_x * delta_x + delta_y * delta_y) < 0.001f){
+        if(((int)(new_point.x) - win_size_half_x < 0) ||((int)(new_point.y) - win_size_half_y < 0)){
+            break;
+        }
+
+        if(delta_length < 0.05f){
             break;
         }
     }
-
     next_point->x = new_point.x;
     next_point->y = new_point.y;
+    return 0;
 }
 
 
 #ifdef IMAGE_LIB_USING_NEON
 
-void optflow_lk_calc_neon_u8(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err)
+int optflow_lk_calc_neon_u8(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err)
 {
 	int i,j,k,ii,jj;
 	unsigned char *src;
@@ -336,10 +362,24 @@ void optflow_lk_calc_neon_u8(struct optflow_lk *op,struct matrix_s *prev_img,str
 	float It,Ixt,Iyt;
 	float b1, b2,ib1,ib2;
 	float *Ibuf;
-	float delta_x,delta_y;
+	float delta_x,delta_y,delta_length;
 	struct point2f new_point;
 
     int32x4_t vkernel[3];
+
+    if((ppx + 1 + win_size_half_x > prev_img->cols) ||(ppy + 1 + win_size_half_y > prev_img->rows)){
+        printf("ppx:%d  win:%d cols:%d\r\n",ppx,win_size_half_x,prev_img->cols);
+        printf("ppy:%d  win:%d cols:%d\r\n",ppy,win_size_half_y,prev_img->rows);
+        next_point->x = prev_point->x;
+        next_point->y = prev_point->y;
+        return -1;
+    }
+
+    if((ppx - win_size_half_x < 0) ||(ppy - win_size_half_y < 0)){
+        next_point->x = prev_point->x;
+        next_point->y = prev_point->y;
+        return -1;
+    }
 
     a = prev_point->x - (float)ppx;
     b = prev_point->y - (float)ppy;
@@ -437,7 +477,7 @@ void optflow_lk_calc_neon_u8(struct optflow_lk *op,struct matrix_s *prev_img,str
     {
         next_point->x = prev_point->x;
         next_point->y = prev_point->y;
-        return;
+        return -3;
     }
     D = 1./D;
 
@@ -509,20 +549,33 @@ void optflow_lk_calc_neon_u8(struct optflow_lk *op,struct matrix_s *prev_img,str
         delta_x = (A12*b2 - A22*b1) * D;
         delta_y = (A12*b1 - A11*b2) * D;
 
+        delta_length = sqrt(delta_x * delta_x + delta_y * delta_y);
+
+        if( delta_length > op->max_vel){
+            next_point->x = prev_point->x + delta_x * op->max_vel / delta_length;
+            next_point->y = prev_point->y + delta_y * op->max_vel / delta_length;
+            return 0;
+        }
+
         new_point.x += delta_x;
         new_point.y += delta_y;
 
-        if((fabs(new_point.x - prev_point->x) > op->max_vel) ||  (fabs(new_point.y - prev_point->y) > op->max_vel)){
+        if(((int)(new_point.x) + 1 + win_size_half_x > next_img->cols) || ((int)(new_point.y)  + 1 + win_size_half_y > next_img->rows)){
             break;
         }
 
-        if((delta_x * delta_x + delta_y * delta_y) < 0.001f){
+        if(((int)(new_point.x) - win_size_half_x < 0) ||((int)(new_point.y) - win_size_half_y < 0)){
+            break;
+        }
+
+        if(delta_length < 0.05f){
             break;
         }
     }
 
     next_point->x = new_point.x;
     next_point->y = new_point.y;
+    return 0;
 }
 
 #endif

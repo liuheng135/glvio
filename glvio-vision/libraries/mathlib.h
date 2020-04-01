@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <float.h>
-#include <sys/time.h>
 #include <time.h> 
 
 #ifndef M_PI

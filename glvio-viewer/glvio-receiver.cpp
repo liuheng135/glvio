@@ -2,7 +2,7 @@
 #include "lwlink.h"
 #include "udp.h"
 #include <opencv2/opencv.hpp>
-#include <opencv2/viz.hpp>
+#include <opencv2/viz/vizcore.hpp>
 #include "image_lib.h"
 #include "stdio.h"
 #include "quaternion.h"
@@ -12,9 +12,6 @@ using namespace std;
 struct udp_data_s udp0;
 struct lwlink_data_handler_s link_handler;
 char recvBuf[12000] = { 0 };
-
-#define FLOW_IMAGE_WIDTH    60
-#define FLOW_IMAGE_HEIGHT   60
 
 void martix2Mat(cv::Mat *dst,struct matrix_s *src)
 {
@@ -35,10 +32,13 @@ int main(int argc, char *argv[])
     cv::viz::Viz3d my3DWindow("3D sense");
     my3DWindow.showWidget("3D sense", cv::viz::WCoordinateSystem());
 
-    cv::Mat cv_img(FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,CV_8UC1);
+    cv::Mat cv_img(60,80,CV_8UC1);
     cv::namedWindow("image",1);
    
-    printf("viewer start...\r\n");
+
+    cout << "cv_img,cols: " << cv_img.cols << " rows: " << cv_img.rows << endl;
+
+    cout << "viewer start..." << endl;
 
     udp_init(&udp0,ip_addr,14550);
     lwlink_data_handler_init(&link_handler,0x02);
@@ -63,9 +63,18 @@ int main(int argc, char *argv[])
                         }
                     }
 
-                    if(msg_type == MSG_TYPE_RAW_IMAGE){
+                    if(msg_type == MSG_TYPE_IMAGE){
+                        struct lwlink_image_info_s *img_info;
                         uint8_t *img_data = lwlink_data_handler_get_data(&link_handler);
-                        memcpy(cv_img.data,img_data,FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT);
+                        img_info = (struct lwlink_image_info_s *)img_data;
+                        img_data += sizeof(struct lwlink_image_info_s);
+
+                        if(cv_img.cols != img_info->cols || cv_img.rows != img_info->rows){
+                            cout << "image , cols: " << img_info->cols << " rows: " << img_info->rows << endl;
+                            cv_img.resize(img_info->cols,img_info->rows);
+                        }
+
+                        memcpy(cv_img.data,img_data,img_info->cols*img_info->rows);
 
                         for(i = 0; i < 4;i++){
                             cv::Point2f pstart(fp[i].pos_x,fp[i].pos_y);
@@ -73,7 +82,7 @@ int main(int argc, char *argv[])
                             cv::arrowedLine(cv_img,pstart,pend,cv::Scalar::all(-1),1,8,0,0.1);
                         }
                         cv::imshow("image",cv_img);
-                        cout << "image recved" << endl;
+                        
                     }
 
                     if(msg_type == MSG_TYPE_FEATURE3D){

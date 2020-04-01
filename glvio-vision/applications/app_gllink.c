@@ -6,8 +6,8 @@
 #include "mathlib.h"
 #include "app_events.h"
 
-
-unsigned char gllink_image_buffer[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+struct lwlink_image_info_s gllink_image_info;
+unsigned char gllink_image_buffer[PREVIEW_IMAGE_WIDTH*PREVIEW_IMAGE_HEIGHT];
 float gllink_image_timestamp;
 
 int gllink_channel_fd;
@@ -30,6 +30,10 @@ void  lwlink_init(void)
 	lwlink_data_handler_init(&lwlink_handler,2);
     lwlink_send_timer_10hz = 0.0f;
     lwlink_send_timer_20hz = 0.0f;
+
+    gllink_image_info.cols = PREVIEW_IMAGE_WIDTH;
+    gllink_image_info.rows = PREVIEW_IMAGE_HEIGHT;
+    gllink_image_info.type = LWLINK_IMAGE_TYPE_RAW;
 }
 
 void lwlink_send_data(int fd,float dt)
@@ -109,21 +113,20 @@ void lwlink_send_data(int fd,float dt)
     if(lwlink_send_timer_10hz > 0.1f){
         lwlink_send_timer_10hz -= 0.1f;
 
-        if(flow_copy_image(gllink_image_buffer,&gllink_image_timestamp) > 0){
-            msg_length = lwlink_msg_pack(&lwlink_handler,MSG_TYPE_RAW_IMAGE,gllink_image_buffer,FLOW_IMAGE_WIDTH * FLOW_IMAGE_WIDTH);
+        if(flow_copy_image(gllink_image_buffer,&gllink_image_timestamp) > 0){ 
+            msg_length = lwlink_image_pack(&lwlink_handler,&gllink_image_info,gllink_image_buffer);
             hal_dev_write(fd,lwlink_handler.txbuf,msg_length,0);
         }
 
         if(flow_copy_matched_points(flow_mp_2d) > 0){
-
             for(i = 0;i < 4;i++){
                 gfp_2d.image_id = 0;
                 gfp_2d.feature_id = i;
-                gfp_2d.pos_x = flow_mp_2d[i].start_x / 0.00425f + 30.f;
-                gfp_2d.pos_y = flow_mp_2d[i].start_y / 0.00425f + 30.f;
+                gfp_2d.pos_x = flow_mp_2d[i].start_x / (FLOW_RAD_PER_PIXEL * 4.f) + gllink_image_info.cols * 0.5f;
+                gfp_2d.pos_y = flow_mp_2d[i].start_y / (FLOW_RAD_PER_PIXEL * 4.f) + gllink_image_info.rows * 0.5f;
 
-                gfp_2d.vel_x = (flow_mp_2d[i].end_x - flow_mp_2d[i].start_x)/ 0.00425f;
-                gfp_2d.vel_y = (flow_mp_2d[i].end_y - flow_mp_2d[i].start_y)/ 0.00425f;
+                gfp_2d.vel_x = (flow_mp_2d[i].end_x - flow_mp_2d[i].start_x) / (FLOW_RAD_PER_PIXEL * 4.f);
+                gfp_2d.vel_y = (flow_mp_2d[i].end_y - flow_mp_2d[i].start_y) / (FLOW_RAD_PER_PIXEL * 4.f);
 
                 
                 msg_length = lwlink_msg_pack(&lwlink_handler,MSG_TYPE_FEATURE2D,(uint8_t *)&gfp_2d,sizeof(gfp_2d));

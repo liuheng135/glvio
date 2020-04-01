@@ -1,7 +1,7 @@
 PROJECT_PATH = $(shell pwd)
 
 INCLUDE := -I$(PROJECT_PATH)
-INCLUDE += -I/usr/local/Cellar 
+INCLUDE += -I/usr/local/include/opencv4 
 #INCLUDE += -I/usr/local/Cellar/eigen/3.3.7/include/eigen3
 #INCLUDE += -I/usr/local/Cellar/vtk/8.2.0_3/include/vtk-8.2
 
@@ -24,7 +24,7 @@ LIB += -lopencv_viz
 #LIB += -lpcl_keypoints
 
 all:
-	g++ glvio-receiver.cpp lwlink.c udp.c quaternion.c  $(INCLUDE) $(LIB) -o glvio-viewer.o
+	g++ -std=c++11 glvio-receiver.cpp lwlink.c udp.c quaternion.c  $(INCLUDE) $(LIB) -o glvio-viewer.o
 
 clean:
 	rm *.o

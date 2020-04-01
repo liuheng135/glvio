@@ -84,6 +84,331 @@ int make_deriv_kernel(struct matrix_s *kx,struct matrix_s *ky,int dx,int dy,int 
     return 0;
 }
 
+#ifdef IMAGE_LIB_USING_NEON
+int matrix_binning_8x8_neon_u8(struct matrix_s *src,struct matrix_s *dst,struct point2i *pos)
+{
+    int i;
+    unsigned char buffer[8];
+    unsigned int  *bp1 = (unsigned int *)buffer;
+    unsigned int  *bp2 = (unsigned int *)(buffer+4);
+    unsigned int  *dp1;
+    unsigned int  *dp2;
+    unsigned char *src_ptr = src->data + pos->y * src->cols + pos->x;
+    unsigned char *dst_ptr = dst->data + pos->y / 2 * dst->cols + pos->x / 2;
+
+    uint8x8_t c1;
+    uint8x8_t c2;
+    uint8x8_t ca1;
+    uint8x8_t ca2;
+
+    if(pos->x < 0 || pos->x > (src->cols - 8)){
+        return -1;
+    }
+
+    if(pos->y < 0 || pos->y > (src->rows - 8)){
+        return -1;
+    }
+
+    for(i = 0;i < 2; i++){
+        c1 = vld1_u8(src_ptr);
+        c2 = vld1_u8(src_ptr+src->cols);
+        ca1 = vhadd_u8(c1,c2);
+        ca1 = vshr_n_u8(ca1,1);
+
+        src_ptr += src->cols * 2;
+        c1 = vld1_u8(src_ptr);
+        c2 = vld1_u8(src_ptr+src->cols);
+        ca2 = vhadd_u8(c1,c2);
+        ca2 = vshr_n_u8(ca2,1);
+
+        ca1 = vpadd_u8(ca1,ca2); 
+        vst1_u8(buffer,ca1);
+        dp1 = (unsigned int *)dst_ptr;
+        dp2 = (unsigned int *)(dst_ptr + dst->cols);
+        *dp1 = *bp1;
+        *dp2 = *bp2;
+        src_ptr += src->cols * 2;
+        dst_ptr += dst->cols * 2;
+    }
+    return 0;
+}
+
+int matrix_binning_neon_u8(struct matrix_s *src,struct matrix_s *dst)
+{
+    struct point2i pos;
+    register unsigned int tmp;
+    int i,j,si,sj;
+    int quotient_x = src->cols / 8;
+    int quotient_y = src->rows / 8;
+    int remainder_x = src->cols % 8;
+    int remainder_y = src->rows % 8;
+
+    if(src->type != dst->type || dst->type != IMAGE_TYPE_8U){
+        return -1;
+    }
+
+    if(src->channel != 1 || src->channel != dst->channel){
+        return -2;
+    }
+
+
+    if(dst->cols * 2 != src->cols || dst->rows * 2 != src->rows){
+        return -3;
+    }
+
+    if(dst->data == NULL || src->data == NULL){
+        return -4;
+    }
+
+    for(j = 0; j < src->rows;j+=8){
+        for(i = 0; i < src->cols;i+=8){
+            pos.x = i;
+            pos.y = j;
+            matrix_binning_8x8_neon_u8(src,dst,&pos);
+        }
+    }
+
+    if(remainder_x > 0){
+        for(j = 0; j < quotient_y * 4;j++){
+            for(i = quotient_x * 4; i < quotient_x * 4 + remainder_x / 2;i++){
+                si = i*2;
+                sj = j*2;
+                tmp = src->data[sj * src->cols + si] + src->data[sj * src->cols + si + 1] \
+                    + src->data[(sj + 1) * src->cols + si] + src->data[(sj + 1) * src->cols + si + 1];
+                dst->data[j * dst->cols + i] = (unsigned char)(tmp >> 2);
+            }
+        }
+    }
+
+    if(remainder_y > 0){
+        for(j = quotient_y * 4; j < quotient_y * 4 + remainder_y / 2;j++){
+            for(i = 0; i < dst->cols;i++){
+                si = i*2;
+                sj = j*2;
+                tmp = src->data[sj * src->cols + si] + src->data[sj * src->cols + si + 1] \
+                    + src->data[(sj + 1) * src->cols + si] + src->data[(sj + 1) * src->cols + si + 1];
+                dst->data[j * dst->cols + i] = (unsigned char)(tmp >> 2);
+            }
+        }
+    }
+    return 0;
+}
+
+int matrix_fast_corner_neon_u8(struct matrix_s *img,struct point2i *pos,unsigned char threshold)
+{
+    int i;
+    int count;
+    unsigned char buffer[16];
+    unsigned char center;
+ 
+    uint8x16_t va;
+    uint8x16_t vb;
+    uint8x16_t vc;
+
+    int offset_table[16][2] = \
+        {{-1,-3},{0,-3},{1,-3},
+      {-2,-2},            {2,-2},
+    {-3,-1},                {3,-1},
+    {-3,0},                  {3,0},
+    {-3,1},                  {3,1},
+      {-2,2},             {2,2},
+        {-1,3},{0,3},{1,3}};
+
+    for(i = 0;i < 16;i++){
+        buffer[i] = *(img->data + pos->x + offset_table[i][0]+(pos->y+offset_table[i][1]) * img->cols);
+    }
+    center = *(img->data + pos->x + pos->y * img->cols);
+
+    va = vld1q_u8(buffer);
+    vb = vld1q_dup_u8(&center);
+    vc = vabdq_u8(va,vb);
+    vst1q_u8(buffer,vc);
+
+    count = 0;
+    for(i = 0;i < 16;i++){
+        if(buffer[i] > threshold){
+            count++;
+        }
+    }
+
+    return count;
+}
+
+int matrix_block_sad_8x8_neon_u8(struct matrix_s *img,struct point2i *pos)
+{
+    int i;
+    unsigned int   buffer[4];
+    unsigned char *ptr;
+    unsigned int   zero;
+ 
+    uint8x8_t   va;
+    uint8x8_t   vb;
+    uint16x8_t  vc;
+    uint32x4_t  vsum;
+    uint8x8x2_t va2;
+
+    ptr = img->data + pos->x + pos->y * img->cols;
+    zero = 0;
+    vsum = vld1q_dup_u32(&zero);
+    for(i = 0;i < 8;i++){
+        va = vld1_u8(ptr);
+        ptr += img->cols;
+        vb = vld1_u8(ptr);
+        vc = vabdl_u8(va,vb);
+        vsum = vpadalq_u16(vsum,vc);
+    }
+
+    ptr = img->data + pos->x + pos->y * img->cols;
+    for(i = 0; i < 4; i++){
+        va = vld1_u8(ptr);
+        ptr += img->cols;
+        vb = vld1_u8(ptr);
+        va2 = vtrn_u8(va,vb);
+        vc = vabdl_u8(va2.val[0],va2.val[1]);
+        vsum = vpadalq_u16(vsum,vc); 
+
+        ptr = ptr - img->cols + 1;
+        va = vld1_u8(ptr);
+        ptr += img->cols;
+        vb = vld1_u8(ptr);
+        va2 = vtrn_u8(va,vb);
+        vc = vabdl_u8(va2.val[0],va2.val[1]);
+        vsum = vpadalq_u16(vsum,vc);
+
+        ptr -= 1;
+        ptr += img->cols;
+    }
+
+    vst1q_u32(buffer,vsum);
+
+    return buffer[0] + buffer[1] + buffer[2] + buffer[3];
+}
+
+int  matrix_calc_pixel_deriv_neon(struct matrix_s *img,int x,int y, int32x4_t vkernel[3])
+{
+    int buffer[4];
+    int32x4_t vdat;
+    int32x4_t vsum;
+   
+    unsigned char   *img_data_8u    = img->data;
+    int             *img_data_32s   = (int *)img->data;
+
+    buffer[3] = 0;
+
+    vsum = vld1q_dup_s32(&buffer[3]);
+
+    if(img->type == IMAGE_TYPE_8U){
+        img_data_8u += (y-1) * img->cols + x - 1;
+
+        buffer[0] = (int)*(img_data_8u);
+        buffer[1] = (int)*(img_data_8u+1);
+        buffer[2] = (int)*(img_data_8u+2);
+        vdat = vld1q_s32(buffer);
+        vsum = vmlaq_s32(vsum,vdat,vkernel[0]);
+
+        img_data_8u += img->cols;
+        buffer[0] = (int)*(img_data_8u);
+        buffer[1] = (int)*(img_data_8u+1);
+        buffer[2] = (int)*(img_data_8u+2);
+        vdat = vld1q_s32(buffer);
+        vsum = vmlaq_s32(vsum,vdat,vkernel[1]);
+
+        img_data_8u += img->cols;
+        buffer[0] = (int)*(img_data_8u);
+        buffer[1] = (int)*(img_data_8u+1);
+        buffer[2] = (int)*(img_data_8u+2);
+
+        vdat = vld1q_s32(buffer);
+        vsum = vmlaq_s32(vsum,vdat,vkernel[2]);
+        vst1q_s32(buffer,vsum);
+        return buffer[0] + buffer[1] + buffer[2];
+    }
+
+    if(img->type == IMAGE_TYPE_32S){
+        img_data_32s += (y - 1) * img->cols + x - 1;
+
+        vdat = vld1q_s32(img_data_32s);
+        vsum = vmlaq_s32(vsum,vdat,vkernel[0]);
+
+        img_data_32s+= img->cols;
+        vdat = vld1q_s32(img_data_32s);
+        vsum = vmlaq_s32(vsum,vdat,vkernel[1]);
+
+        img_data_32s+= img->cols;
+        vdat = vld1q_s32(img_data_32s);
+        vsum = vmlaq_s32(vsum,vdat,vkernel[2]);
+
+        vst1q_s32(buffer,vsum);
+        return buffer[0] + buffer[1] + buffer[2];
+    }
+
+    return 0;
+}
+
+int matrix_sobel_neon(struct matrix_s *src,struct matrix_s *dst,int dx,int dy)
+{
+    int i,j;
+	int *ptra,*ptrb;
+    int border_x;
+	int border_y;
+    int buffer[4];
+    struct matrix_s kx,ky;
+    int32x4_t vkernel[3];
+
+    if(dst->type != IMAGE_TYPE_32S){
+        return -1;
+    }
+
+    if(src->cols != dst->cols || src->rows != dst->rows){
+        return -2;
+    }
+
+    if(src->data == NULL || dst->data == NULL){
+        return -3;
+    }
+
+    matrix_create(&kx,3,1,1,IMAGE_TYPE_32S);
+    matrix_create(&ky,3,1,1,IMAGE_TYPE_32S);
+    if(kx.data == NULL || ky.data == NULL){
+        return -4;
+    }
+    make_deriv_kernel(&kx,&ky,dx,dy,3);
+
+    ptra = (int *)kx.data;
+    ptrb = (int *)ky.data;
+
+    buffer[3] = 0;
+    for(i = 0;i < 3;i++){
+        buffer[0] = *ptra * *(ptrb + i);
+        buffer[1] = *(ptra + 1) * *(ptrb + i);
+        buffer[2] = *(ptra + 2) * *(ptrb + i);
+        vkernel[i] = vld1q_s32(buffer);
+    }
+    
+    border_x = (kx.cols - 1) / 2;
+    border_y = (ky.cols - 1) / 2;
+    ptra = (int *)(dst->data + border_y * dst->cols + border_x);
+
+    for(j = border_y ; j < src->rows - border_y - 1; j++){
+        for(i = border_x; i < src->cols - border_x; i++){
+            *ptra++ =  matrix_calc_pixel_deriv_neon(src,i,j,vkernel);
+        }
+        ptra+=2;
+    }
+
+    ptra+=2;
+    for(i = border_x; i < src->cols - border_x - 1; i++){
+        *ptra++ =  matrix_calc_pixel_deriv_neon(src,i,j,vkernel);
+    }
+    *ptra++ =  matrix_calc_pixel_deriv(src,i,j,&kx,&ky);
+
+    matrix_destroy(&kx);
+    matrix_destroy(&ky);
+    return 0;
+}
+
+#endif
+
 int matrix_binning(struct matrix_s *src,struct matrix_s *dst)
 {
     int i,j;

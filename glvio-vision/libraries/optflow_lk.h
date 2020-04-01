@@ -45,10 +45,9 @@ void optflow_lk_create(struct optflow_lk *op,int max_layer,float max_vel,float l
 void optflow_lk_set_lambda(struct optflow_lk *op,float lambda);
 void optflow_lk_set_win_size(struct optflow_lk *op,struct size2i *win_size);
 void optflow_lk_destroy(struct optflow_lk *op);
-void optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err);
-
+int  optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err);
 #ifdef IMAGE_LIB_USING_NEON
-void optflow_lk_calc_neon_u8(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err);
+int  optflow_lk_calc_neon_u8(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err);
 #endif
 
 #endif

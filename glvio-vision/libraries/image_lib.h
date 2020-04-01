@@ -55,6 +55,7 @@ int   matrix_convert_type(struct matrix_s *src,struct matrix_s *dst);
 int   matrix_filter_x(struct matrix_s *src,struct matrix_s *dst,struct matrix_s *kernel,float scale);
 int   matrix_filter_y(struct matrix_s *src,struct matrix_s *dst,struct matrix_s *kernel,float scale);
 float matrix_get_pixel_val(struct matrix_s *img,float x,float y);
+/*  scale image to 1/2  */
 int   matrix_binning(struct matrix_s *src,struct matrix_s *dst);
 int   matrix_sobel(struct matrix_s *src,struct matrix_s *dst,int dx,int dy);
 int   matrix_copy_channel(struct matrix_s *src,struct matrix_s *dst,int src_ch,int dst_ch);
@@ -63,6 +64,7 @@ void  matrix_destroy(struct matrix_s *mat);
 
 #ifdef IMAGE_LIB_USING_NEON
 int   matrix_binning_8x8_neon_u8(struct matrix_s *src,struct matrix_s *dst,struct point2i *pos);
+/*  scale image to 1/2 by using neon */
 int   matrix_binning_neon_u8(struct matrix_s *src,struct matrix_s *dst);
 int   matrix_fast_corner_neon_u8(struct matrix_s *img,struct point2i *pos,unsigned char threshold);
 int   matrix_block_sad_8x8_neon_u8(struct matrix_s *img,struct point2i *pos);

@@ -41,11 +41,43 @@ int lwlink_msg_pack(struct lwlink_data_handler_s *handler,uint8_t type,uint8_t *
     return len+9;
 }
 
+int lwlink_image_pack(struct lwlink_data_handler_s *handler,struct lwlink_image_info_s *image_info,uint8_t *data)
+{
+    int i;
+    int len;
+    uint8_t *ptr;
+
+    len = sizeof(struct lwlink_image_info_s) + image_info->cols * image_info->rows;
+    
+    handler->txbuf[0] = MSG_HEAD1;
+    handler->txbuf[1] = MSG_HEAD2;
+    handler->txbuf[2] = handler->id;
+    handler->txbuf[3] = MSG_TYPE_IMAGE;
+    handler->txbuf[4] = (len & 0xff);
+    handler->txbuf[5] = (len >> 8) & 0xff;
+    
+    ptr = (uint8_t *)image_info;
+    for(i = 0; i < sizeof(struct lwlink_image_info_s); i++){
+        handler->txbuf[i+6] = *ptr++;
+    }
+
+    for(i = sizeof(struct lwlink_image_info_s); i < image_info->cols * image_info->rows; i++){
+        handler->txbuf[i+6] = data[i];
+    }
+    
+    handler->txbuf[len + 7] = MSG_END1;
+    handler->txbuf[len + 8] = MSG_END2;
+    
+    return len+9;
+}
+
 int lwlink_data_handler_init(struct lwlink_data_handler_s *handler,uint8_t id)
 {
+    //printf("AAA\r\n");
     handler->status = HANDLER_STATUS_WHEAD1;
     handler->id = id;
     handler->rxbuf_ptr = 0;
+    //printf("BBB\r\n");
     return 0;
 }
 
@@ -82,6 +114,7 @@ int lwlink_data_handler_parse(struct lwlink_data_handler_s *handler,uint8_t ch)
                         return 1;
                     }else{
                         handler->status  = HANDLER_STATUS_WHEAD1;
+                        printf("Wrong checksum: 0x%02x  0x%02x\r\n",handler->rxbuf[handler->rxbuf_ptr - 3],lwlink_data_checksum_calc(handler->rxbuf));
                         return -2;
                     }
                 }else{

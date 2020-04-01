@@ -12,17 +12,15 @@
 #include "image_lib.h"
 #include "optflow_lk.h"
 #include "msgque.h"
+#include "lpfilter.h"
 
-
-#define STACK_SIZE                      (64*1024)
+#define STACK_SIZE                      (512*1024)
 #define ARRAY_SIZE(arr)                 ( sizeof(arr) / sizeof((arr)[0]) )
 #define IS_IN_RANGE(var, min, max)      ( ((min) <= (var)) && ((var) <= (max)) )
 
 #define CAM0_IMAGE_WIDTH    640
 #define CAM0_IMAGE_HEIGHT   480
 
-#define FLOW_IMAGE_WIDTH    32
-#define FLOW_IMAGE_HEIGHT   32
 
 //#define FLOW_USING_LWLINK
 #define FLOW_USING_MSGQUE
@@ -34,7 +32,15 @@ struct net_data_s net0;
 struct lwlink_data_handler_s link_handler;
 #endif
 
+
 struct optflow_lk  optflow0;
+struct optflow_lk  optflow1;
+
+struct lpfilter_s flow_filter[2];
+
+int  flow_log_fd = -1;
+char flow_log_buffer[128];
+int  flow_log_length;
 
 static inline double get_time_now(void)
 {
@@ -47,72 +53,61 @@ static inline double get_time_now(void)
 	return dt;
 }
 
-
-int image_buffer_a[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
-int image_buffer_b[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
-
-unsigned char image_binning_buffer_0[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT * 64];
-unsigned char image_binning_buffer_1[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT * 16];
-unsigned char image_binning_buffer_2[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT * 4];
-unsigned char image_binning_buffer_3[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+unsigned char image_binning_buffer_0[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 4];
+unsigned char image_binning_buffer_1[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 16];
+unsigned char image_binning_buffer_2[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 64];
+unsigned char image_binning_buffer_3[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 64];
+unsigned char image_binning_buffer_4[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 256];
+unsigned char image_binning_buffer_5[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 256];
 
 static void *thread_flow(void *arg)
 {
-    int i;
     int ret = 0;
     int counter = 0;
 	int msg_length = 0;
     uint8_t *image = NULL;
     uint8_t *swap_ptr = NULL;
+	
+	struct matrix_s raw_img;
+    struct matrix_s half_img;
+    struct matrix_s quater_img;
+    struct matrix_s next_img;
+    struct matrix_s prev_img;
+    struct matrix_s next_img_half;
+    struct matrix_s prev_img_half;
+ 
+    struct size2i  opt_win_size = {.x = 19,.y = 19}; 
+
+    struct point2f prev_point;
+    struct point2f next_point;
+    struct point2i temp_point;
+    float          flow_err;
 
     float  dt;
     float  calc_time;
     double now;
     double last;
-	
-	struct matrix_s raw_img;
-    struct matrix_s roi_img;
-    struct matrix_s bin1_img;
-	struct matrix_s bin2_img;
-    struct matrix_s bin3_img;
-    struct matrix_s prev_img;
-    struct matrix_s next_img;
-
-	struct point2i roi_start = {
-            .x = (CAM0_IMAGE_WIDTH  - FLOW_IMAGE_WIDTH * 8) / 2,
-            .y = (CAM0_IMAGE_HEIGHT - FLOW_IMAGE_HEIGHT * 8)  /2,};
-
-	struct size2i  roi_size = {.x = FLOW_IMAGE_WIDTH * 8, .y = FLOW_IMAGE_HEIGHT * 8};
-    struct size2i  opt_win_size = {.x = 17,.y = 17}; 
-
-    struct point2f prev_point;
-    struct point2f next_point;
-    float          flow_err;
 
     ret = camera_init("/dev/video1",CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT);
     if(ret < 0){
         exit(-1);
     }
-
     
     image = camera_get_image(); 
     matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
-    matrix_init(&roi_img,FLOW_IMAGE_WIDTH * 8,FLOW_IMAGE_HEIGHT * 8,1,IMAGE_TYPE_8U,image_binning_buffer_0);
-    matrix_init(&bin1_img,FLOW_IMAGE_WIDTH * 4,FLOW_IMAGE_HEIGHT * 4,1,IMAGE_TYPE_8U,image_binning_buffer_1);
-    matrix_init(&bin2_img,FLOW_IMAGE_WIDTH * 2,FLOW_IMAGE_HEIGHT * 2,1,IMAGE_TYPE_8U,image_binning_buffer_2);
-    matrix_init(&bin3_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image_binning_buffer_3);
-    matrix_init(&prev_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_32S,(unsigned char *)image_buffer_a);
-    matrix_init(&next_img,FLOW_IMAGE_WIDTH,FLOW_IMAGE_HEIGHT,1,IMAGE_TYPE_32S,(unsigned char *)image_buffer_b);
-    
+    matrix_init(&half_img,CAM0_IMAGE_WIDTH / 2,CAM0_IMAGE_HEIGHT / 2,1,IMAGE_TYPE_8U,image_binning_buffer_0);
+    matrix_init(&quater_img,CAM0_IMAGE_WIDTH / 4,CAM0_IMAGE_HEIGHT / 4,1,IMAGE_TYPE_8U,image_binning_buffer_1);
+    matrix_init(&prev_img,CAM0_IMAGE_WIDTH / 8,CAM0_IMAGE_HEIGHT / 8,1,IMAGE_TYPE_8U,image_binning_buffer_2);
+    matrix_init(&next_img,CAM0_IMAGE_WIDTH / 8,CAM0_IMAGE_HEIGHT / 8,1,IMAGE_TYPE_8U,image_binning_buffer_3);
+    matrix_init(&prev_img_half,CAM0_IMAGE_WIDTH / 16,CAM0_IMAGE_HEIGHT / 16,1,IMAGE_TYPE_8U,image_binning_buffer_4);
+    matrix_init(&next_img_half,CAM0_IMAGE_WIDTH / 16,CAM0_IMAGE_HEIGHT / 16,1,IMAGE_TYPE_8U,image_binning_buffer_5);
+    matrix_binning_neon_u8(&raw_img,&half_img);
+    matrix_binning_neon_u8(&half_img,&quater_img);
+    matrix_binning_neon_u8(&quater_img,&prev_img);
+    matrix_binning_neon_u8(&prev_img,&prev_img_half);
 
-    printf("roi start = %d, %d   size = %d, %d  \r\n",roi_start.x,roi_start.y,roi_size.x,roi_size.y); 
-    matrix_copy_aera(&raw_img,&roi_img,&roi_start,&roi_size);
-    matrix_binning(&roi_img,&bin1_img);
-    matrix_binning(&bin1_img,&bin2_img);
-    matrix_binning(&bin2_img,&bin3_img);
-    if(matrix_convert_type(&bin3_img,&prev_img) != 0 ){
-        printf("unsupport image type\r\n");
-    }
+    set_cutoff_param(&flow_filter[0],50,5);
+    set_cutoff_param(&flow_filter[1],50,5);
 
 #ifdef FLOW_USING_LWLINK
     if(network_init(&net0,"192.168.0.20",3366) < 0){
@@ -125,39 +120,44 @@ static void *thread_flow(void *arg)
     msgque_init();
 #endif
 
+    flow_log_fd = open("/tmp/flow_log.txt",O_CREAT | O_RDWR | O_TRUNC);
+
     optflow_lk_create(&optflow0,1,5.0f,0.5f,&opt_win_size);
+    optflow_lk_create(&optflow1,1,5.0f,0.5f,&opt_win_size);
 
     last = get_time_now();
+
     while(1) {
         //从摄像头获取一帧图像
-        
-        image = camera_get_image();  
         now = get_time_now();
         dt = (float)(now - last);
         last = now;
+        
+        image = camera_get_image();  
 		matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
-        matrix_copy_aera(&raw_img,&roi_img,&roi_start,&roi_size);
-        matrix_binning(&roi_img,&bin1_img);
-        matrix_binning(&bin1_img,&bin2_img);
-        matrix_binning(&bin2_img,&bin3_img);
-        if(matrix_convert_type(&bin3_img,&next_img) != 0 ){
-            printf("unsupport image type\r\n");
-            continue;
-        }
+        matrix_binning_neon_u8(&raw_img,&half_img);
+        matrix_binning_neon_u8(&half_img,&quater_img);
+        matrix_binning_neon_u8(&quater_img,&next_img);
+        matrix_binning_neon_u8(&next_img,&next_img_half);
 
-        prev_point.x = FLOW_IMAGE_WIDTH  / 2;
-        prev_point.y = FLOW_IMAGE_HEIGHT / 2;
+        prev_point.x = next_img_half.cols / 2;
+        prev_point.y = next_img_half.rows / 2;
+        optflow_lk_calc_neon_u8(&optflow0,&prev_img_half,&next_img_half,&prev_point,&next_point,&flow_err);
+        temp_point.x = (int)(next_point.x * 2.f + 0.5f);
+        temp_point.y = (int)(next_point.y * 2.f + 0.5f);
+        prev_point.x = (float)temp_point.x;
+        prev_point.y = (float)temp_point.y;
+        optflow_lk_calc_neon_u8(&optflow1,&prev_img,&next_img,&prev_point,&next_point,&flow_err);
 
-        optflow_lk_calc(&optflow0,&prev_img,&next_img,&prev_point,&next_point,&flow_err);
+        swap_ptr = next_img_half.data;
+        next_img_half.data = prev_img_half.data;
+        prev_img_half.data = swap_ptr;
+
         swap_ptr = next_img.data;
         next_img.data = prev_img.data;
         prev_img.data = swap_ptr;
 
         counter++;
-
-        now = get_time_now();
-        calc_time = (float)(now - last);
-
 #ifdef FLOW_USING_LWLINK
         if(counter % 3 == 0){
             char *recv_buffer[128];
@@ -191,16 +191,16 @@ static void *thread_flow(void *arg)
             flow_err = 250.f;
         }
         msg_info.msg_type = 10;
-        msg_info.vx = (next_point.x - prev_point.x) / dt;
-        msg_info.vy = (next_point.y - prev_point.y) / dt;
-        msg_info.version = 300;
+        msg_info.vx = lowpassfilter2p(&flow_filter[0],(next_point.x - next_img.cols / 2) / dt);
+        msg_info.vy = lowpassfilter2p(&flow_filter[1],(next_point.y - next_img.rows / 2) / dt);
+        msg_info.version = 307;
         msg_info.time_loop = dt * 1000.f;
         msg_info.confidence = (uint8_t)flow_err;
-        msgque_send(&msg_info);
-
-        //printf("flow = % 8.2f,% 8.2f % 7.2f % 8.2f\r\n",msg_info.vx,msg_info.vy,msg_info.time_loop,flow_err);
+        //msgque_send(&msg_info);
+        if(counter % 5 == 0){
+            printf("flow = % 8.2f % 8.2f % 6.2f \r\n", msg_info.vx,msg_info.vy,flow_err);
+        }
 #endif
-
     }
     camera_deinit();
     return NULL;

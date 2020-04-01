@@ -11,6 +11,7 @@
 #include "lwlink.h"
 #include "image_lib.h"
 #include "optflow_lk.h"
+#include "jpegencoder.h"
 
 struct block_sad_info_s{
     int id;
@@ -21,7 +22,7 @@ struct block_sad_info_s{
 pthread_mutex_t mp_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct flow_matched_point_s flow_mp[4];
-unsigned char image_buffer[FLOW_IMAGE_WIDTH*FLOW_IMAGE_HEIGHT];
+unsigned char image_buffer[PREVIEW_IMAGE_WIDTH*PREVIEW_IMAGE_HEIGHT];
 float image_timestamp;
 
 int flow_copy_matched_points(struct flow_matched_point_s *mps)
@@ -41,16 +42,15 @@ int flow_copy_image(unsigned char *img,float *timestamp)
 {
     if(image_timestamp > *timestamp){
         if(pthread_mutex_trylock(&mp_mutex) == 0){
-            memcpy(img,image_buffer,FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT);
+            memcpy(img,image_buffer,PREVIEW_IMAGE_WIDTH*PREVIEW_IMAGE_HEIGHT);
             *timestamp = image_timestamp;
             pthread_mutex_unlock(&mp_mutex);
-            return FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT;
+            return PREVIEW_IMAGE_WIDTH * PREVIEW_IMAGE_HEIGHT;
         }
-        return 0;
+        return 1;
     }
     return 0;
 }
-
 
 struct optflow_lk  optflow0;
 
@@ -68,6 +68,9 @@ static inline double get_time_now(void)
 unsigned char image_buffer_a[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 4];
 unsigned char image_buffer_b[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 4];
 
+unsigned char image_buffer_c[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 16];
+unsigned char image_buffer_d[CAM0_IMAGE_WIDTH*CAM0_IMAGE_HEIGHT / 64];
+
 void *thread_flow(void *arg)
 {
     int i,j;
@@ -84,6 +87,9 @@ void *thread_flow(void *arg)
 
     struct matrix_s prev_img;
     struct matrix_s next_img;
+
+    struct matrix_s next_img_half;
+    struct matrix_s next_img_quater;
 
     struct size2i  opt_win_size = {.x = 17,.y = 17}; 
 
@@ -104,12 +110,14 @@ void *thread_flow(void *arg)
     matrix_init(&raw_img,CAM0_IMAGE_WIDTH,CAM0_IMAGE_HEIGHT,1,IMAGE_TYPE_8U,image);
     matrix_init(&prev_img,CAM0_IMAGE_WIDTH / 2,CAM0_IMAGE_HEIGHT / 2,1,IMAGE_TYPE_8U,image_buffer_a);
     matrix_init(&next_img,CAM0_IMAGE_WIDTH / 2,CAM0_IMAGE_HEIGHT / 2,1,IMAGE_TYPE_8U,image_buffer_b);
+    matrix_init(&next_img_half,CAM0_IMAGE_WIDTH / 4,CAM0_IMAGE_HEIGHT / 4,1,IMAGE_TYPE_8U,image_buffer_c);
+    matrix_init(&next_img_quater,CAM0_IMAGE_WIDTH / 8,CAM0_IMAGE_HEIGHT / 8,1,IMAGE_TYPE_8U,image_buffer_d);
+    
     matrix_binning_neon_u8(&raw_img,&prev_img);
     optflow_lk_create(&optflow0,1,5.0f,0.5f,&opt_win_size);
 
     last = get_time_now();
     while(1) {
-        //从摄像头获取一帧图像
         image = camera_get_image();
         now = get_time_now();
         dt = (float)(now - last);
@@ -119,8 +127,8 @@ void *thread_flow(void *arg)
         matrix_binning_neon_u8(&raw_img,&next_img);
 
         block_count = 0;
-        for(j = 12;j < next_img.cols-12;j+=8){
-            for(i = 12 ;i < next_img.rows-12 ;i+=8){
+        for(j = 12;j < next_img.rows-12;j+=8){
+            for(i = 12 ;i < next_img.cols-12 ;i+=8){
                 block_sad_list[block_count].id = block_count;
                 block_sad_list[block_count].pos.x = i-4;
                 block_sad_list[block_count].pos.y = j-4;
@@ -155,7 +163,6 @@ void *thread_flow(void *arg)
         }
 
         for(i = 0; i < 4; i++){
-            //optflow_lk_calc(&optflow0,&prev_img,&next_img,&prev_point[i],&next_point[i],&flow_err[i]);
             optflow_lk_calc_neon_u8(&optflow0,&prev_img,&next_img,&prev_point[i],&next_point[i],&flow_err[i]);
         }
 
@@ -163,19 +170,18 @@ void *thread_flow(void *arg)
         next_img.data = prev_img.data;
         prev_img.data = swap_ptr;
 
-        printf("flow = %f %f \r\n",next_point[0].x - prev_point[0].x,next_point[0].y - prev_point[0].y);
-
         pthread_mutex_lock(&mp_mutex);
         for(i = 0; i < 4; i++){
-            flow_mp[i].start_x = (prev_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.00425f;
-            flow_mp[i].start_y = (prev_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.00425f;
-            flow_mp[i].end_x = (next_point[i].x - FLOW_IMAGE_WIDTH * 0.5f) * 0.00425f;
-            flow_mp[i].end_y = (next_point[i].y - FLOW_IMAGE_HEIGHT * 0.5f) * 0.00425f;
-            flow_mp[i].quality = flow_err[i];
+            flow_mp[i].start_x  = (prev_point[i].x - next_img.cols * 0.5f) * FLOW_RAD_PER_PIXEL;
+            flow_mp[i].start_y  = (prev_point[i].y - next_img.rows * 0.5f) * FLOW_RAD_PER_PIXEL;
+            flow_mp[i].end_x    = (next_point[i].x - next_img.cols * 0.5f) * FLOW_RAD_PER_PIXEL;
+            flow_mp[i].end_y    = (next_point[i].y - next_img.rows * 0.5f) * FLOW_RAD_PER_PIXEL;
+            flow_mp[i].quality  = flow_err[i];
             flow_mp[i].timestamp += dt;
         }
-        
-        //memcpy(image_buffer,bin2_img.data,FLOW_IMAGE_WIDTH * FLOW_IMAGE_HEIGHT);
+        matrix_binning_neon_u8(&next_img,&next_img_half);
+        matrix_binning_neon_u8(&next_img_half,&next_img_quater);
+        memcpy(image_buffer,next_img_quater.data,next_img_quater.cols * next_img_quater.rows);
         image_timestamp+=dt;
         pthread_mutex_unlock(&mp_mutex);
     }

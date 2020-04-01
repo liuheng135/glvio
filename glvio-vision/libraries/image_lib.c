@@ -249,6 +249,10 @@ int matrix_block_sad_8x8_neon_u8(struct matrix_s *img,struct point2i *pos)
     uint32x4_t  vsum;
     uint8x8x2_t va2;
 
+    if((pos->x + 8 >= img->cols) || (pos->y + 8 >= img->rows)){
+        return 0;
+    }
+
     ptr = img->data + pos->x + pos->y * img->cols;
     zero = 0;
     vsum = vld1q_dup_u32(&zero);
