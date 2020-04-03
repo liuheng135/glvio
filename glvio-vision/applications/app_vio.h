@@ -4,6 +4,7 @@
 #include "rotation.h"
 #include "quaternion.h"
 #include "image_lib.h"
+#include "geometry.h"
 
 #define CAMERA_FOCUS  0.003f
 
@@ -20,12 +21,9 @@ struct vio_data_s {
     struct point3f translation;
     struct point3f velocity;
     struct point3f accle;
-    struct point3f velocity_last;
     float  translation_scale;
 
-    struct point3f point_start[4];
-    struct point3f point_end[4];
-    struct point3f point_recoveried[4];
+    struct geo_feature_s features[4];
 };
 
 void vio_get_data(struct vio_data_s *dat);

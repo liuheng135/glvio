@@ -39,9 +39,6 @@ void  lwlink_init(void)
 void lwlink_send_data(int fd,float dt)
 {
     int i;
-
-    struct flow_matched_point_s flow_mp_2d[4];
-    struct lwlink_feature2D_s gfp_2d;
     struct lwlink_feature3D_s fp;
     struct lwlink_attitude_s att;
     struct lwlink_local_position_s lpos;
@@ -70,13 +67,6 @@ void lwlink_send_data(int fd,float dt)
         for(i = 0;i < 4;i++){
             fp.image_id = 0;
             fp.feature_id = i;
-            fp.pos_x = vio_dat.point_start[i].x;
-            fp.pos_y = vio_dat.point_start[i].y;
-            fp.pos_z = vio_dat.point_start[i].z;
-
-            fp.vel_x = vio_dat.point_end[i].x - vio_dat.point_start[i].x;
-            fp.vel_y = vio_dat.point_end[i].y - vio_dat.point_start[i].y;
-            fp.vel_z = vio_dat.point_end[i].z - vio_dat.point_start[i].z;
             msg_length = lwlink_msg_pack(&lwlink_handler,MSG_TYPE_FEATURE3D,(uint8_t *)&fp,sizeof(fp));
             hal_dev_write(fd,lwlink_handler.txbuf,msg_length,0);
         }
@@ -84,10 +74,6 @@ void lwlink_send_data(int fd,float dt)
         for(i = 4;i < 8;i++){
             fp.image_id = 0;
             fp.feature_id = i;
-
-            vr[0] = vio_dat.point_start[i-4].x;
-            vr[1] = vio_dat.point_start[i-4].y;
-            vr[2] = vio_dat.point_start[i-4].z;
 
             quater_rotate(vr,vr,&vio_dat.rotation);
 
@@ -116,22 +102,6 @@ void lwlink_send_data(int fd,float dt)
         if(flow_copy_image(gllink_image_buffer,&gllink_image_timestamp) > 0){ 
             msg_length = lwlink_image_pack(&lwlink_handler,&gllink_image_info,gllink_image_buffer);
             hal_dev_write(fd,lwlink_handler.txbuf,msg_length,0);
-        }
-
-        if(flow_copy_matched_points(flow_mp_2d) > 0){
-            for(i = 0;i < 4;i++){
-                gfp_2d.image_id = 0;
-                gfp_2d.feature_id = i;
-                gfp_2d.pos_x = flow_mp_2d[i].start_x / (FLOW_RAD_PER_PIXEL * 4.f) + gllink_image_info.cols * 0.5f;
-                gfp_2d.pos_y = flow_mp_2d[i].start_y / (FLOW_RAD_PER_PIXEL * 4.f) + gllink_image_info.rows * 0.5f;
-
-                gfp_2d.vel_x = (flow_mp_2d[i].end_x - flow_mp_2d[i].start_x) / (FLOW_RAD_PER_PIXEL * 4.f);
-                gfp_2d.vel_y = (flow_mp_2d[i].end_y - flow_mp_2d[i].start_y) / (FLOW_RAD_PER_PIXEL * 4.f);
-
-                
-                msg_length = lwlink_msg_pack(&lwlink_handler,MSG_TYPE_FEATURE2D,(uint8_t *)&gfp_2d,sizeof(gfp_2d));
-                hal_dev_write(fd,lwlink_handler.txbuf,msg_length,0);
-            }
         }
     }
 }

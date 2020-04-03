@@ -6,7 +6,7 @@
 #include "app_imu.h"
 #include "config.h"
 #include "app_debug.h"
-#include "geometry.h"
+
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -58,21 +58,11 @@ void vio_update(float dt)
 {
     int i;
     struct eulur_s              ie = {0,0,0};
-    struct eulur_s              re = {0,0,0};
     
     struct gyro_data_s          gyro;
     struct acc_data_s           acc;
-    struct flow_matched_point_s points_matched_from_flow[4];
-    struct geo_matches_s        points_matched_for_geo[4];
-
+    struct geo_feature_s        features_from_flow[4];
     struct quaternion_s         rotation;
-    struct point3f              translation;
-    
-    /*
-    float  translation_length;
-    float  accel_length;
-    float  temp;
-    */
    
     float  vector_compansate[3];
     float  flow_interval;
@@ -91,13 +81,14 @@ void vio_update(float dt)
     if(vio_att_buffer_wptr - VIO_ATT_BUFFER_LEN < 0){
         return;
     }
-    flow_copy_matched_points(points_matched_from_flow);
-    if(points_matched_from_flow[0].timestamp > flow_data_timestamp){
-        flow_interval = points_matched_from_flow[0].timestamp - flow_data_timestamp;
-        flow_data_timestamp = points_matched_from_flow[0].timestamp;
+    flow_copy_matched_points(features_from_flow);
+    if(features_from_flow[0].observer_next.timestamp > flow_data_timestamp){
+        flow_interval = features_from_flow[0].observer_next.timestamp - flow_data_timestamp;
+        flow_data_timestamp = features_from_flow[0].observer_next.timestamp;
 
         gyro_integraton = 0.f;
         eulur_to_quater(&rotation,&ie);
+        printf("r = %f %f %f %f\r\n",rotation.w,rotation.x,rotation.y,rotation.z);
         vio_att_buffer_rptr = vio_att_buffer_wptr - VIO_FLOW_DELAY_NUM;
 
         /* calulate rotation by integrating */
@@ -113,59 +104,33 @@ void vio_update(float dt)
         vio_data.rotation = rotation;
 
         for(i = 0; i < 4; i++){
-            vector_compansate[0] = points_matched_from_flow[i].start_x;
-            vector_compansate[1] = points_matched_from_flow[i].start_y;
+            vector_compansate[0] = features_from_flow[i].observer_prev.point_pos_in_camera.x;
+            vector_compansate[1] = features_from_flow[i].observer_prev.point_pos_in_camera.y;
             vector_compansate[2] = 1.0f;
 
             /* calculate compansation */
             quater_rotate(vector_compansate,vector_compansate,&rotation);
+            
+            vio_data.features[i] = features_from_flow[i];
 
-            vio_data.point_start[i].x = points_matched_from_flow[i].start_x;
-            vio_data.point_start[i].y = points_matched_from_flow[i].start_y;
-            vio_data.point_start[i].z = 1.0f;
-
-            /* compansate */
-            vio_data.point_end[i].x = points_matched_from_flow[i].end_x - vector_compansate[0] + points_matched_from_flow[i].start_x;
-            vio_data.point_end[i].y = points_matched_from_flow[i].end_y - vector_compansate[1] + points_matched_from_flow[i].start_y;
-            vio_data.point_end[i].z = vector_compansate[2];
-            points_matched_for_geo[i].l.x = vio_data.point_start[i].x;
-            points_matched_for_geo[i].l.y = vio_data.point_start[i].y;
-            points_matched_for_geo[i].l.z = vio_data.point_start[i].z;
-
-            points_matched_for_geo[i].r.x = vio_data.point_end[i].x;
-            points_matched_for_geo[i].r.y = vio_data.point_end[i].y;
-            points_matched_for_geo[i].r.z = vio_data.point_end[i].z;
+            vio_data.features[i].observer_next.point_pos_in_camera.x -= vector_compansate[0];
+            vio_data.features[i].observer_next.point_pos_in_camera.y -= vector_compansate[1];
+            vio_data.features[i].observer_next.point_pos_in_camera.z -= vector_compansate[2];
         }
 
-        /* recovery pose */
-        geo_recovery_translation(&translation,points_matched_for_geo[0],points_matched_for_geo[1]);
+        /* recovery pose and depth*/
+        geo_recovery_translation_2D2D(&vio_data.features[0],&vio_data.features[1]);
+        geo_recovery_depth(&vio_data.features[0]);
+        geo_recovery_depth(&vio_data.features[1]);
 
-        vio_data.translation.x = translation.x;
-        vio_data.translation.y = translation.y;
-        vio_data.translation.z = translation.z; 
-
-        if(geo_recovery_depth(&vio_data.point_recoveried[0],points_matched_for_geo[0],translation) > -1){
-            geo_recovery_depth(&vio_data.point_recoveried[1],points_matched_for_geo[1],translation);
-        }else{
-            printf("can not recover depth\r\n");
-        }
+        vio_data.translation.x = vio_data.features[0].observer_next.camera_pos_in_world.x;
+        vio_data.translation.y = vio_data.features[0].observer_next.camera_pos_in_world.y;
+        vio_data.translation.z = vio_data.features[0].observer_next.camera_pos_in_world.z;
     }
 
     //vio_print_timer += dt;
     if(vio_print_timer > 0.05f){
         vio_print_timer = 0.f;
-        quater_to_eulur(&re,&vio_data.rotation);
-
-        vio_log_len = sprintf(vio_log_buffer," %f , %f, %f, %f \r\n",re.roll,re.pitch,
-                        (points_matched_from_flow[0].end_x - points_matched_from_flow[0].start_x),
-                        (points_matched_from_flow[0].end_y - points_matched_from_flow[0].start_y));
-        if(vio_log_fd > 0){
-
-            write(vio_log_fd,vio_log_buffer,vio_log_len);
-        }
-        printf("points: [%9.3f %9.3f %9.3f],[%9.3f %9.3f %9.3f]\r\n",
-            vio_data.point_recoveried[0].x,vio_data.point_recoveried[0].y,vio_data.point_recoveried[0].z,
-            vio_data.point_recoveried[1].x,vio_data.point_recoveried[1].y,vio_data.point_recoveried[1].z);
     }
     vio_att_buffer_wptr++;
 }

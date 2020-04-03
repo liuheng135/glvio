@@ -71,45 +71,47 @@ int main(int argc, char *argv[])
     viz::WSphere SO1(O1,3,20,viz::Color::white());
     viz::WSphere SO2(O2,3,20,viz::Color::white());
 
-    struct geo_matches_s mp1,mp2;
-    mp1.l.x = P1L.x;
-    mp1.l.y = P1L.y;
-    mp1.l.z = P1L.z;
+    struct geo_feature_s f1,f2;
 
-    mp1.r.x = P1R.x - O2.x;
-    mp1.r.y = P1R.y - O2.y;
-    mp1.r.z = P1R.z - O2.z;
+    f1.observer_prev.point_pos_in_camera.x = P1L.x;
+    f1.observer_prev.point_pos_in_camera.y = P1L.y;
+    f1.observer_prev.point_pos_in_camera.z = P1L.z;
+    f1.observer_prev.point_pos_valid = 1;
 
-    mp2.l.x = P2L.x;
-    mp2.l.y = P2L.y;
-    mp2.l.z = P2L.z;
+    f1.observer_next.point_pos_in_camera.x = P1R.x - O2.x;
+    f1.observer_next.point_pos_in_camera.y = P1R.y - O2.y;
+    f1.observer_next.point_pos_in_camera.z = P1R.z - O2.z;
+    f1.observer_next.point_pos_valid = 1;
 
-    mp2.r.x = P2R.x - O2.x;
-    mp2.r.y = P2R.y - O2.y;
-    mp2.r.z = P2R.z - O2.z;
+    f2.observer_prev.point_pos_in_camera.x = P2L.x;
+    f2.observer_prev.point_pos_in_camera.y = P2L.y;
+    f2.observer_prev.point_pos_in_camera.z = P2L.z;
+    f2.observer_prev.point_pos_valid = 1;
 
-    cout <<"mp1.l =" << mp1.l.x << "," << mp1.l.y << "," << mp1.l.z << endl;
-    cout <<"mp1.r =" << mp1.r.x << "," << mp1.r.y << "," << mp1.r.z << endl << endl;
-    cout <<"mp2.l =" << mp2.l.x << "," << mp2.l.y << "," << mp2.l.z << endl;
-    cout <<"mp2.r =" << mp2.r.x << "," << mp2.r.y << "," << mp2.r.z << endl << endl;
+    f2.observer_next.point_pos_in_camera.x = P2R.x - O2.x;
+    f2.observer_next.point_pos_in_camera.y = P2R.y - O2.y;
+    f2.observer_next.point_pos_in_camera.z = P2R.z - O2.z;
+    f2.observer_next.point_pos_valid = 1;
 
     struct point3f T;
-    struct point3f RP1;
-    struct point3f RP2;
 
-    geo_recovery_translation(&T,mp1,mp2);
+    geo_recovery_translation_2D2D(&f1,&f2);
+    geo_recovery_depth(&f1);
+    geo_recovery_depth(&f2);
 
-    geo_recovery_depth(&RP1,mp1,T);
-    geo_recovery_depth(&RP2,mp2,T);
+    T.x = f1.observer_next.camera_pos_in_world.x;
+    T.y = f1.observer_next.camera_pos_in_world.y;
+    T.z = f1.observer_next.camera_pos_in_world.z;
 
     cout << "O2=" << O2 << endl;
-    cout << "T =" << T.x << " , " << T.y << " , " << T.z << endl;
+    cout << "T2 =" << T.x << " , " << T.y << " , " << T.z << endl;
+    
     cout << endl;
     cout << "P1 =" << P1 << endl;
-    cout << "RP1=" << RP1.x << " , " << RP1.y << " , " << RP1.z << endl;
+    cout << "f1=" << f1.pos_in_world.x << " , " << f1.pos_in_world.y << " , " << f1.pos_in_world.z << endl;
     cout << endl;
     cout << "P2 =" << P2 << endl;
-    cout << "RP2=" << RP2.x << " , " << RP2.y << " , " << RP2.z << endl;
+    cout << "f2=" << f2.pos_in_world.x << " , " << f2.pos_in_world.y << " , " << f2.pos_in_world.z << endl;
 
     while(1) {
         struct quaternion_s q;
