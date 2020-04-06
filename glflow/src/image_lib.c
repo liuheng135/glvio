@@ -169,6 +169,7 @@ int matrix_binning_neon_u8(struct matrix_s *src,struct matrix_s *dst)
     }
 
     if(remainder_x > 0){
+        printf("rx = %d\r\n",remainder_x);
         for(j = 0; j < quotient_y * 4;j++){
             for(i = quotient_x * 4; i < quotient_x * 4 + remainder_x / 2;i++){
                 si = i*2;
@@ -181,6 +182,7 @@ int matrix_binning_neon_u8(struct matrix_s *src,struct matrix_s *dst)
     }
 
     if(remainder_y > 0){
+        printf("ry = %d\r\n",remainder_y);
         for(j = quotient_y * 4; j < quotient_y * 4 + remainder_y / 2;j++){
             for(i = 0; i < dst->cols;i++){
                 si = i*2;
@@ -246,6 +248,10 @@ int matrix_block_sad_8x8_neon_u8(struct matrix_s *img,struct point2i *pos)
     uint16x8_t  vc;
     uint32x4_t  vsum;
     uint8x8x2_t va2;
+
+    if((pos->x + 8 >= img->cols) || (pos->y + 8 >= img->rows)){
+        return 0;
+    }
 
     ptr = img->data + pos->x + pos->y * img->cols;
     zero = 0;

@@ -1134,3 +1134,16 @@ int matrix_copy_channel(struct matrix_s *src,struct matrix_s *dst,int src_ch,int
     }
     return 0;
 }
+
+void print_memory_int(void *addr,int len)
+{
+	int i;
+    int *ptr = (int *)addr;
+
+    printf("0x%llx:",(unsigned long long)addr);
+
+    for(i = 0; i < len;i++){
+        printf("%x ",ptr[i]);
+    }
+    printf("\r\n");
+}

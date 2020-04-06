@@ -106,8 +106,8 @@ static void *thread_flow(void *arg)
     matrix_binning_neon_u8(&quater_img,&prev_img);
     matrix_binning_neon_u8(&prev_img,&prev_img_half);
 
-    set_cutoff_param(&flow_filter[0],50,5);
-    set_cutoff_param(&flow_filter[1],50,5);
+    set_cutoff_param(&flow_filter[0],50,10);
+    set_cutoff_param(&flow_filter[1],50,10);
 
 #ifdef FLOW_USING_LWLINK
     if(network_init(&net0,"192.168.0.20",3366) < 0){

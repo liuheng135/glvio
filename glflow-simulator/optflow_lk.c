@@ -120,7 +120,7 @@ void optflow_lk_destroy(struct optflow_lk *op)
 int optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matrix_s *next_img,struct point2f *prev_point,struct point2f *next_point,float *err)
 {
 	int i,j,k,ii,jj;
-	int *src;
+	unsigned char *src;
 	double D;
     float lambda1 = 1. - op->lambda, lambda2 = op->lambda;
     
@@ -173,7 +173,7 @@ int optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matri
             ii = ppx - win_size_half_x + i;
             jj = ppy - win_size_half_y + j;
 
-            src  = (int *)prev_img->data;  
+            src  = (unsigned char *)prev_img->data;  
             src += jj * prev_img->cols + ii;
             val[0] = (float)src[0];
             val[1] = (float)src[1];
@@ -219,10 +219,10 @@ int optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matri
             iA22 += Ibuf[2] * Ibuf[2];
             iA12 += Ibuf[1] * Ibuf[2];
 
-            A11 += Ibuf[3]*Ibuf[3] + Ibuf[4]*Ibuf[4];
-            A12 += Ibuf[4]*(Ibuf[3] + Ibuf[5]);
-            A22 += Ibuf[4]*Ibuf[4] + Ibuf[5]*Ibuf[5];
-            Ibuf +=  op->deriv_buffer.channel;
+            A11  += Ibuf[3]*Ibuf[3] + Ibuf[4]*Ibuf[4];
+            A12  += Ibuf[4]*(Ibuf[3] + Ibuf[5]);
+            A22  += Ibuf[4]*Ibuf[4] + Ibuf[5]*Ibuf[5];
+            Ibuf += op->deriv_buffer.channel;
         }
     }
 
@@ -269,7 +269,7 @@ int optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matri
                 ii = npx - win_size_half_x + i;
                 jj = npy - win_size_half_y + j;
 
-                src = (int *)next_img->data;  
+                src = (unsigned char *)next_img->data;  
                 src += jj * next_img->cols + ii;
 
                 val[0] = (float)src[0];  
@@ -289,8 +289,8 @@ int optflow_lk_calc(struct optflow_lk *op,struct matrix_s *prev_img,struct matri
                 val[3] = (float)matrix_calc_pixel_deriv(next_img,ii+1,jj+1,&op->kx01,&op->ky01);
                 Iyt = (weight[0] * val[0] + weight[1] * val[1] + weight[2] * val[2] + weight[3] * val[3]) * scale1 - Ibuf[2];
 
-                b1 += Ixt*Ibuf[3] + Iyt*Ibuf[4];
-                b2 += Ixt*Ibuf[4] + Iyt*Ibuf[5];
+                b1  += Ixt*Ibuf[3] + Iyt*Ibuf[4];
+                b2  += Ixt*Ibuf[4] + Iyt*Ibuf[5];
                 ib1 += It*Ibuf[1];
                 ib2 += It*Ibuf[2];
 
